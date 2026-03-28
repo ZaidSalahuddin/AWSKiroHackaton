@@ -282,16 +282,16 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 17.7**
   - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.9_
 
-- [ ] 23. Notification Service
+- [x] 23. Notification Service
   - Implement BullMQ consumer that dispatches FCM (Android) and APNs (iOS) push notifications
   - Handle all job types: `meal_plan_reminder`, `menu_change`, `streak_broken`, `badge_awarded`, `event_special`, `social_activity`, `availability_prediction`, `availability_confirmed`
   - _Requirements: 12.2, 12.5, 13.3, 13.4, 15.3, 17.7, 17.8_
 
 
-- [ ] 24. Checkpoint — all backend services complete
+- [x] 24. Checkpoint — all backend services complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 25. WebSocket real-time layer
+- [x] 25. WebSocket real-time layer
   - Implement WebSocket server on the Express app; define channels per dining hall (`rankings:{hall_id}`, `trending`, `social:{student_id}`, `photos:{item_id}`)
   - Push ranking updates every 30 s per dining hall channel; push trending feed updates every 60 s
   - Push social feed events to follower channels within 60 s of triggering event
@@ -299,13 +299,13 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - Implement reconnect replay: on reconnect, server sends last known state for subscribed channels
   - _Requirements: 2.3, 3.2, 10.2, 11.3_
 
-- [ ] 26. React Native client — project setup and navigation
+- [x] 26. React Native client — project setup and navigation
   - Initialize Expo project in `client/` with TypeScript template
   - Set up React Navigation (tab navigator: Home, Trending, Recommendations, Social, Profile)
   - Configure API client (Axios) with JWT interceptor and WebSocket client with exponential-backoff reconnect
   - _Requirements: 1.1, 2.3, 3.2_
 
-- [ ] 27. Client — Home screen (menu display, rankings, wait times, weather, meal plan balance)
+- [x] 27. Client — Home screen (menu display, rankings, wait times, weather, meal plan balance)
   - Implement dining hall list with open/closed status, current meal period, and wait time estimate
   - Display ranked menu items per hall (sorted by `recency_score`, updated via WebSocket)
   - Display current weather (temperature + conditions) with `weather_stale` indicator
@@ -314,32 +314,32 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 2.3, 7.1, 9.2, 14.1, 14.2_
 
 
-- [ ] 28. Client — Menu item detail screen
+- [x] 28. Client — Menu item detail screen
   - Display name, description, ingredients, allergen tags, `allergen_warning` banner, Health Score, full nutrition panel
   - Display `Previous_Availability_Trend` (bar chart by day-of-week/meal-period) and predicted next appearance or "Not enough history to predict"
   - Show subscribe/unsubscribe button for availability notifications
   - Display photo reviews (CDN images) with report button; show new photos via WebSocket push within 30 s
   - _Requirements: 1.2, 4.3, 5.2, 5.4, 17.3, 17.5, 17.6, 17.7, 11.3, 11.4_
 
-- [ ] 29. Client — Rating submission flow
+- [x] 29. Client — Rating submission flow
   - Implement star-rating UI with check-in confirmation prompt
   - Allow optional photo attachment (JPEG/PNG, ≤10 MB); show validation error on invalid format/size
   - Disable submit if student already rated this item this meal period; show "Already rated" message
   - _Requirements: 2.1, 2.4, 2.6, 11.1, 11.2_
 
-- [ ] 30. Client — Trending Feed screen
+- [x] 30. Client — Trending Feed screen
   - Display top-10 trending items with name, dining hall, recency score, and 60-min rating count; auto-refresh via WebSocket every 60 s
   - Show "Not enough activity yet" when `insufficient_activity: true`
   - Display event specials with "Special Event" badge in the feed
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 15.2, 15.4_
 
-- [ ] 31. Client — Dietary profile and filtering UI
+- [x] 31. Client — Dietary profile and filtering UI
   - Implement dietary profile editor (restrictions checkboxes, allergen input, active toggle, opt-in incomplete toggle)
   - Show "Allergen info incomplete" label on items with `allergen_data_complete: false`
   - _Requirements: 4.1, 4.2, 4.4, 4.5_
 
 
-- [ ] 32. Client — Nutritional tracking and meal log UI
+- [x] 32. Client — Nutritional tracking and meal log UI
   - Implement meal log entry screen (select items + servings); display daily/weekly macro summary with progress bars
   - Show `over_calorie_target` visual indicator when daily calories exceed target
   - Implement nutrition targets editor
