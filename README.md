@@ -21,6 +21,18 @@ npm run test:api
 npm run test:client
 ```
 
+## Environment Variables
+
+`api/src/index.ts` loads `.env` automatically at startup via `dotenv/config`. Copy `.env` and fill in the required values before running the API:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Secret used to sign/verify JWT tokens |
+| `PORT` | Port the Express server listens on (default `3000`) |
+| `OPENWEATHER_API_KEY` | API key for OpenWeatherMap weather data |
+| `VT_DINING_API_URL` | Base URL for the VT Dining Services menu feed |
+
 ## Auth Middleware
 
 `api/src/middleware/auth.ts` exports `authMiddleware` — an Express middleware that validates JWT bearer tokens.

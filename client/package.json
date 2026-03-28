@@ -14,7 +14,7 @@
     "@react-navigation/native-stack": "^6.9.0",
     "axios": "^1.6.0",
     "expo": "~50.0.0",
-    "expo-image-picker": "^55.0.15-canary-20260328-bdc6273",
+    "expo-image-picker": "~13.0.0",
     "react": "18.2.0",
     "react-native": "0.73.0",
     "react-native-safe-area-context": "^4.8.0",

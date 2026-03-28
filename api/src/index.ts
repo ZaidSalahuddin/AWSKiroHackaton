@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import authRouter from './routes/auth';
 import studentsRouter from './routes/students';
@@ -33,8 +34,8 @@ const PORT = process.env.PORT ?? 3000;
 
 startMenuPoller();
 
-app.listen(PORT, () => {
-  console.log(`API server listening on port ${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`API server listening on http://localhost:${PORT}`);
 });
 
 export default app;
