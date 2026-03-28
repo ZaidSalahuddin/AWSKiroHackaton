@@ -19,6 +19,16 @@ you got this twih </3 </3
 
 The `AuthRequest` interface extends Express `Request` with the optional `studentId: string` field.
 
+## Dietary Filter Middleware
+
+`api/src/middleware/dietaryFilter.ts` exports three functions for server-side dietary filtering.
+
+- `dietaryFilterMiddleware` — Express middleware that fetches the student's `DietaryProfile` from the DB (via `studentId` on the request) and attaches it to `req.dietaryProfile`; non-fatal if the fetch fails
+- `applyDietaryFilter(items, profile)` — pure function that removes items conflicting with the student's active restrictions/allergens; items with `allergen_data_complete: false` are excluded unless `profile.opt_in_incomplete === true`; returns items unfiltered when profile is null/inactive
+- `injectAllergenWarning(item, profile)` — pure function that returns the item with `allergen_warning: true` when any item allergen overlaps with the student's profile; returns item unchanged when profile is null/inactive
+
+Filtering is applied server-side before response serialization and is never done inline in route handlers.
+
 ## Recency Score Engine
 
 `api/src/services/recencyScoreEngine.ts` exports `decay(t_hours)` and `recencyScore(ratings, now?)`.

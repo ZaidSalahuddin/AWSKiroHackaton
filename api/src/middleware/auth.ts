@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { DietaryProfile } from '../types';
 
 export interface AuthRequest extends Request {
   studentId?: string;
+  dietaryProfile?: DietaryProfile;
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {

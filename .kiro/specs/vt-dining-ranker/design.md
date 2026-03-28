@@ -2,7 +2,7 @@
 
 ## Overview
 
-VT Dining Ranker is a mobile-first web application (React Native or React + Expo) that gives Virginia Tech students a real-time, personalized view of campus dining. The system aggregates menu data from VT Dining Services, crowdsourced ratings and wait-time reports, nutritional data, weather conditions, and meal plan balances to surface the best food available right now.
+VT Dining Ranker is a web application (React Native or React + Expo) that gives Virginia Tech students a real-time, personalized view of campus dining. The system aggregates menu data from VT Dining Services, crowdsourced ratings and wait-time reports, nutritional data, weather conditions, and meal plan balances to surface the best food available right now.
 
 The core value loop is:
 1. Students open the app and immediately see what's good, what's trending, and how long the wait is.

@@ -1,6 +1,12 @@
 import { Router, Request, Response } from 'express';
 import * as menuService from '../services/menuService';
 import * as ratingService from '../services/ratingService';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
+import {
+  dietaryFilterMiddleware,
+  applyDietaryFilter,
+  injectAllergenWarning,
+} from '../middleware/dietaryFilter';
 
 const router = Router();
 
@@ -18,11 +24,18 @@ router.get('/dining-halls/:id/menu', async (req: Request, res: Response) => {
   return res.json(menu);
 });
 
-router.get('/menu-items/:id', async (req: Request, res: Response) => {
-  const item = await menuService.getMenuItem(req.params.id);
-  if (!item) return res.status(404).json({ error: 'not found' });
-  return res.json(item);
-});
+// GET /api/menu-items/:id — inject allergen warning on detail
+router.get(
+  '/menu-items/:id',
+  authMiddleware,
+  dietaryFilterMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    const item = await menuService.getMenuItem(req.params.id);
+    if (!item) return res.status(404).json({ error: 'not found' });
+    const result = injectAllergenWarning(item, req.dietaryProfile ?? null);
+    return res.json(result);
+  },
+);
 
 // GET /api/menu-items/:id/ratings (paginated)
 router.get('/menu-items/:id/ratings', async (req: Request, res: Response) => {
@@ -32,10 +45,16 @@ router.get('/menu-items/:id/ratings', async (req: Request, res: Response) => {
   return res.json(data);
 });
 
-// GET /api/dining-halls/:id/ranked-items
-router.get('/dining-halls/:id/ranked-items', async (req: Request, res: Response) => {
-  const items = await ratingService.getRankedItems(req.params.id);
-  return res.json(items);
-});
+// GET /api/dining-halls/:id/ranked-items — apply dietary filter
+router.get(
+  '/dining-halls/:id/ranked-items',
+  authMiddleware,
+  dietaryFilterMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    const items = await ratingService.getRankedItems(req.params.id);
+    const filtered = applyDietaryFilter(items, req.dietaryProfile ?? null);
+    return res.json(filtered);
+  },
+);
 
 export default router;

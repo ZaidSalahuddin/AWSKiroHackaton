@@ -2,6 +2,7 @@ import axios from 'axios';
 import { pool } from '../db/client';
 import { redis } from '../cache/redis';
 import { EventEmitter } from 'events';
+import { healthScoreOrNull } from './healthScoreService';
 
 export const menuEvents = new EventEmitter();
 
@@ -49,6 +50,14 @@ export async function ingestMenuData(menuData: any[]) {
 
     if (result.rows[0]) {
       const row = result.rows[0];
+
+      // Compute and persist health_score
+      const score = healthScoreOrNull(item.nutrition ?? null);
+      await pool.query(
+        `UPDATE menu_item SET health_score = $1 WHERE id = $2`,
+        [score, row.id]
+      );
+
       await pool.query(
         `INSERT INTO availability_log (menu_item_id, dining_hall_id, appeared_on, meal_period)
          VALUES ($1, $2, $3, $4)

@@ -86,7 +86,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
 - [x] 7. Checkpoint — core data pipeline
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Dietary Filter Service
+- [x] 8. Dietary Filter Service
   - Implement middleware that reads `Dietary_Profile` from JWT and excludes conflicting items before response serialization
   - Exclude items with `allergen_data_complete: false` unless `opt_in_incomplete: true`
   - Inject `allergen_warning: true` on item detail responses when a match is found
@@ -105,7 +105,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 4.5**
   - _Requirements: 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 9. Health Score Service
+- [x] 9. Health Score Service
   - Implement `healthScore(nutrition)` pure function with documented formula (base 10, deductions/bonuses, clamped to [1,10])
   - Compute and persist `health_score` on `MENU_ITEM` during menu ingestion
   - Return `{ health_score: null, nutrition_unavailable: true }` when nutritional data is missing
@@ -118,7 +118,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 5.1, 5.3, 5.4_
 
 
-- [ ] 10. Trending Feed Service
+- [x] 10. Trending Feed Service
   - Implement BullMQ worker that runs every 60 seconds: query items with ≥1 rating in past 60 min, sort by `count × recency_score`, take top 10
   - Implement `GET /api/trending`; return `{ items: [], insufficient_activity: true }` when fewer than 3 items qualify
   - Cache result in Redis with 60 s TTL
