@@ -38,3 +38,25 @@ Filtering is applied server-side before response serialization and is never done
 - Satisfies Property 4 (decay ratio ≥ 2× at 6h) and Property 5 (ranked list invariants) from the design spec
 
 Tests live in `api/src/__tests__/recencyScoreEngine.spec.ts` and cover unit cases plus property-based tests using `fast-check` (≥100 runs each).
+
+## WebSocket Client
+
+`client/src/websocket/wsClient.ts` exports a singleton `wsClient` — a `VTDiningWebSocketClient` instance connected to `$EXPO_PUBLIC_WS_URL/ws` (defaults to `ws://localhost:3000/ws`).
+
+- `connect()` / `disconnect()` — open or intentionally close the connection
+- `subscribe(channel)` / `unsubscribe(channel)` — manage channel subscriptions; on reconnect, all active subscriptions are automatically re-sent so the server can replay last known state
+- `onMessage(handler)` — register a message handler; returns an unsubscribe function
+- Reconnects automatically on unexpected close with exponential backoff: starts at 1 s, doubles each attempt, caps at 30 s
+- Channels follow the server-defined naming convention: `rankings:{hall_id}`, `trending`, `social:{student_id}`, `photos:{item_id}`
+
+## Menu Item Detail Screen
+
+`client/src/screens/MenuItemDetailScreen.tsx` renders the full detail view for a single menu item.
+
+- Displays name, description, allergen tags, and an allergen warning banner when the item matches the student's dietary profile
+- Shows a health score badge (color-coded green/amber/red) and a full nutrition panel (calories, protein, carbs, fat, fiber, sodium); shows "Nutrition info unavailable" when data is missing
+- Renders an availability trend bar chart grouped by day-of-week, built from the item's appearance history
+- Shows the predicted next appearance (day + meal period) or "Not enough history to predict" when insufficient data exists
+- Subscribe/unsubscribe button for availability push notifications (`POST /api/menu-items/:id/subscribe`, `DELETE /api/menu-items/:id/subscribe`)
+- Photo reviews section displays CDN images with a report button; new photos pushed via the `photos:{item_id}` WebSocket channel are prepended with a fade-in animation within 30 s
+- Pull-to-refresh reloads all data; all network calls use `Promise.allSettled` so a single failure doesn't block the rest of the screen

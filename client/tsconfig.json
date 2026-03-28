@@ -5,7 +5,7 @@
     "lib": ["ES2020"],
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "noEmit": true
   },
   "include": ["src/**/*", "App.tsx"],

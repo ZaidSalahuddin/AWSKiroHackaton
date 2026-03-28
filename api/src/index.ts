@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import { connectRedis } from './cache/redis';
 import authRouter from './routes/auth';
 import studentsRouter from './routes/students';
@@ -21,8 +22,10 @@ import { startRecencyWorker } from './workers/recencyWorker';
 import { startTrendingWorker } from './workers/trendingWorker';
 import { startWeatherPoller } from './services/weatherService';
 import { startAvailabilityWorker } from './workers/availabilityWorker';
+import { initWebSocketServer } from './websocket/wsServer';
 
 const app = express();
+const httpServer = http.createServer(app);
 
 app.use(express.json());
 
@@ -52,7 +55,8 @@ connectRedis()
     startTrendingWorker();
     startWeatherPoller();
     startAvailabilityWorker();
-    app.listen(PORT, () => {
+    initWebSocketServer(httpServer);
+    httpServer.listen(PORT, () => {
       console.log(`API server listening on port ${PORT}`);
     });
   })
