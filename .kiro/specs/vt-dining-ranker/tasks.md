@@ -265,7 +265,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 15.1, 15.2, 15.3, 15.4_
 
 
-- [ ] 22. Availability History and Prediction Service
+- [x] 22. Availability History and Prediction Service
   - Implement `GET /api/menu-items/:id/availability-history` and `GET /api/menu-items/:id/availability-prediction`
   - Implement prediction algorithm: group by `(day_of_week, meal_period, dining_hall_id)` over trailing 90 days; require ≥4 appearances; threshold ≥25% of weeks; return `{ prediction_available: false }` when insufficient history
   - Implement daily BullMQ cron job to recompute predictions; enqueue `availability_prediction` notifications for subscribers when item predicted within 24 h
@@ -282,7 +282,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 17.7**
   - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.9_
 
-- [~] 23. Notification Service
+- [ ] 23. Notification Service
   - Implement BullMQ consumer that dispatches FCM (Android) and APNs (iOS) push notifications
   - Handle all job types: `meal_plan_reminder`, `menu_change`, `streak_broken`, `badge_awarded`, `event_special`, `social_activity`, `availability_prediction`, `availability_confirmed`
   - _Requirements: 12.2, 12.5, 13.3, 13.4, 15.3, 17.7, 17.8_

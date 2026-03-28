@@ -15,10 +15,12 @@ import gamificationRouter from './routes/gamification';
 import mealPlanningRouter from './routes/mealPlanning';
 import hokiePassportRouter from './routes/hokiePassport';
 import eventSpecialsRouter from './routes/eventSpecials';
+import availabilityRouter from './routes/availabilityRoutes';
 import { startMenuPoller } from './services/menuService';
 import { startRecencyWorker } from './workers/recencyWorker';
 import { startTrendingWorker } from './workers/trendingWorker';
 import { startWeatherPoller } from './services/weatherService';
+import { startAvailabilityWorker } from './workers/availabilityWorker';
 
 const app = express();
 
@@ -39,6 +41,7 @@ app.use('/api', gamificationRouter);
 app.use('/api', mealPlanningRouter);
 app.use('/api', hokiePassportRouter);
 app.use('/api', eventSpecialsRouter);
+app.use('/api', availabilityRouter);
 
 const PORT = process.env.PORT ?? 3000;
 
@@ -48,6 +51,7 @@ connectRedis()
     startRecencyWorker();
     startTrendingWorker();
     startWeatherPoller();
+    startAvailabilityWorker();
     app.listen(PORT, () => {
       console.log(`API server listening on port ${PORT}`);
     });
