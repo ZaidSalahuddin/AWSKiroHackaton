@@ -8,6 +8,19 @@ instagram is for uncs
 
 you got this twih </3 </3
 
+## Common Commands
+
+```bash
+# Run both API and client dev servers concurrently
+npm run dev
+
+# Run API tests
+npm run test:api
+
+# Run client tests
+npm run test:client
+```
+
 ## Auth Middleware
 
 `api/src/middleware/auth.ts` exports `authMiddleware` — an Express middleware that validates JWT bearer tokens.

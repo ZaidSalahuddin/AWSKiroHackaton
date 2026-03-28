@@ -5,7 +5,7 @@ export async function getStudent(id: string) {
   const result = await pool.query(
     `SELECT id, vt_email, username, display_name, dietary_profile,
             nutrition_targets, leaderboard_opt_out, privacy_setting,
-            hokie_passport_connected, created_at
+            created_at
      FROM student WHERE id = $1`,
     [id],
   );
@@ -45,7 +45,7 @@ export async function updateStudent(
      WHERE id = $${idx}
      RETURNING id, vt_email, username, display_name, dietary_profile,
                nutrition_targets, leaderboard_opt_out, privacy_setting,
-               hokie_passport_connected, created_at`,
+               created_at`,
     values,
   );
   return result.rows[0] ?? null;

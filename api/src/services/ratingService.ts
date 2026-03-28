@@ -1,5 +1,5 @@
 import { pool } from '../db/client';
-import { recencyRecomputeQueue } from '../workers/queues';
+import { recomputeItemScore } from './recencyScoreEngine';
 
 export interface SubmitRatingInput {
   studentId: string;
@@ -8,8 +8,8 @@ export interface SubmitRatingInput {
   mealPeriod: string;
   mealDate: string;
   checkInVerified: boolean;
-  confirmConsumed?: boolean; // explicit confirmation flag
-  checkInTimestamp?: Date;   // when student checked in
+  confirmConsumed?: boolean;
+  checkInTimestamp?: Date;
 }
 
 export async function submitRating(input: SubmitRatingInput) {
@@ -18,7 +18,6 @@ export async function submitRating(input: SubmitRatingInput) {
     checkInVerified, confirmConsumed, checkInTimestamp,
   } = input;
 
-  // Requirement 2.4: must have checked in within 90 min OR explicit confirmation
   if (!confirmConsumed) {
     if (!checkInVerified || !checkInTimestamp) {
       throw Object.assign(new Error('check_in_required'), { status: 400, code: 'check_in_required' });
@@ -39,13 +38,16 @@ export async function submitRating(input: SubmitRatingInput) {
 
     const rating = result.rows[0];
 
-    // Enqueue recency recompute job (Requirement 2.1)
-    await recencyRecomputeQueue.add('recompute', { menuItemId }, { attempts: 3 });
+    await recomputeItemScore(menuItemId);
+
+    await pool.query(
+      `INSERT INTO activity_event (student_id, event_type, payload) VALUES ($1, $2, $3)`,
+      [studentId, 'rating_submitted', JSON.stringify({ menu_item_id: menuItemId, stars })]
+    );
 
     return rating;
   } catch (err: any) {
     if (err.code === '23505') {
-      // Unique constraint violation: duplicate rating (Requirement 2.6)
       throw Object.assign(new Error('already_rated'), { status: 409, code: 'already_rated' });
     }
     throw err;
@@ -76,7 +78,6 @@ export async function getRatingsForItem(menuItemId: string, page = 1, limit = 20
 }
 
 export async function getRankedItems(diningHallId: string) {
-  // Return items for today sorted by recency_score descending (Requirement 2.3)
   const today = new Date().toISOString().split('T')[0];
   const result = await pool.query(
     `SELECT * FROM menu_item

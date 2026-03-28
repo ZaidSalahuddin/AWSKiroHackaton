@@ -7,7 +7,11 @@
     "client"
   ],
   "scripts": {
+    "dev": "concurrently --names \"api,client\" --prefix-colors \"cyan,magenta\" \"npm run start --workspace=api\" \"npm run start --workspace=client\"",
     "test:api": "npm --workspace=api test",
     "test:client": "npm --workspace=client test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

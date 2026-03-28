@@ -1,5 +1,5 @@
 import { pool } from '../db/client';
-import { getWeather, WeatherData } from './weatherService';
+import { getCurrentWeather as getWeather, WeatherData } from './weatherService';
 import { applyDietaryFilter } from '../middleware/dietaryFilter';
 import { MenuItem, DietaryProfile } from '../types';
 
@@ -121,7 +121,9 @@ export function itemMatchesTags(item: MenuItem, tags: string[]): boolean {
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
-async function fetchAvailableItems(mealPeriod: string): Promise<MenuItem[]> {
+type MenuItemWithScore = MenuItem & { recency_score?: number };
+
+async function fetchAvailableItems(mealPeriod: string): Promise<MenuItemWithScore[]> {
   const today = new Date().toISOString().split('T')[0];
   const result = await pool.query(
     `SELECT * FROM menu_item WHERE menu_date = $1 AND meal_period = $2`,
@@ -130,7 +132,6 @@ async function fetchAvailableItems(mealPeriod: string): Promise<MenuItem[]> {
   return result.rows.map((r: any) => ({
     ...r,
     allergens: Array.isArray(r.allergens) ? r.allergens : JSON.parse(r.allergens ?? '[]'),
-    recency_score_updated_at: new Date(r.recency_score_updated_at),
   }));
 }
 
@@ -196,7 +197,9 @@ export async function getRecommendations(
   // 4. Score each item
   const scored = await Promise.all(
     dietaryFiltered.map(async (item) => {
-      const recencyScore = item.recency_score != null ? Math.min(item.recency_score / 5, 1) : 0.5;
+      const recencyScore = (item as MenuItemWithScore).recency_score != null
+        ? Math.min(((item as MenuItemWithScore).recency_score as number) / 5, 1)
+        : 0.5;
       const ratingHistoryAffinity = await getRatingHistoryAffinity(studentId, item);
       const cuisinePreferenceMatch = 0.5; // default when no preference history
       const weatherBoost = applyWeatherBoost(item, weather);
@@ -232,7 +235,9 @@ export async function getRecommendations(
     relaxed_filters.push('dietary_filter');
     const allScored = await Promise.all(
       items.map(async (item) => {
-        const recencyScore = item.recency_score != null ? Math.min(item.recency_score / 5, 1) : 0.5;
+        const recencyScore = (item as MenuItemWithScore).recency_score != null
+          ? Math.min(((item as MenuItemWithScore).recency_score as number) / 5, 1)
+          : 0.5;
         const ratingHistoryAffinity = await getRatingHistoryAffinity(studentId, item);
         const cuisinePreferenceMatch = 0.5;
         const weatherBoost = applyWeatherBoost(item, weather);

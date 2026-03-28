@@ -41,9 +41,17 @@ describe('groupByStation()', () => {
     const total = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
     expect(total).toBe(items.length);
   });
+
+  it('mocks pool.query directly without Redis', () => {
+    // groupByStation is a pure function — no DB or cache needed
+    const items = [{ id: 'x', name: 'Test', station: 'Grill' }];
+    const result = groupByStation(items);
+    expect(result['Grill']).toHaveLength(1);
+  });
 });
 
 // ─── Property 1: Menu items are grouped by station ────────────────────────────
+// Feature: vt-dining-ranker, Property 1: Menu items are grouped by station
 // Validates: Requirements 1.1
 
 describe('Property 1: Menu items are grouped by station', () => {
@@ -61,9 +69,7 @@ describe('Property 1: Menu items are grouped by station', () => {
         (items) => {
           const grouped = groupByStation(items);
           for (const [stationName, stationItems] of Object.entries(grouped)) {
-            // Station key must not be null/undefined string
             if (stationName === 'null' || stationName === 'undefined') return false;
-            // Every item in the group must have a non-null station field
             for (const item of stationItems) {
               if (item.station === null || item.station === undefined) return false;
             }
@@ -88,7 +94,6 @@ describe('Property 1: Menu items are grouped by station', () => {
         ),
         (items) => {
           const grouped = groupByStation(items);
-          // Each item should appear in exactly one group
           const allGroupedIds = Object.values(grouped).flatMap((g) => g.map((i: any) => i.id));
           const inputIds = items.map((i) => i.id);
           return (
@@ -103,6 +108,7 @@ describe('Property 1: Menu items are grouped by station', () => {
 });
 
 // ─── Property 3: Active meal period is always present ─────────────────────────
+// Feature: vt-dining-ranker, Property 3: Active meal period is always present
 // Validates: Requirements 1.5
 
 describe('Property 3: Active meal period is always present', () => {

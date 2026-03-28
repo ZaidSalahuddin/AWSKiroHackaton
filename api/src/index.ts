@@ -1,6 +1,4 @@
 import express from 'express';
-import http from 'http';
-import { connectRedis } from './cache/redis';
 import authRouter from './routes/auth';
 import studentsRouter from './routes/students';
 import menuRouter from './routes/menu';
@@ -11,22 +9,11 @@ import waitTimeRouter from './routes/waitTime';
 import weatherRouter from './routes/weather';
 import recommendationsRouter from './routes/recommendations';
 import socialRouter from './routes/social';
-import photoReviewRouter from './routes/photoReview';
 import gamificationRouter from './routes/gamification';
 import mealPlanningRouter from './routes/mealPlanning';
-import hokiePassportRouter from './routes/hokiePassport';
-import eventSpecialsRouter from './routes/eventSpecials';
-import availabilityRouter from './routes/availabilityRoutes';
 import { startMenuPoller } from './services/menuService';
-import { startRecencyWorker } from './workers/recencyWorker';
-import { startTrendingWorker } from './workers/trendingWorker';
-import { startWeatherPoller } from './services/weatherService';
-import { startAvailabilityWorker } from './workers/availabilityWorker';
-import { initWebSocketServer } from './websocket/wsServer';
 
 const app = express();
-const httpServer = http.createServer(app);
-
 app.use(express.json());
 
 app.use('/api/auth', authRouter);
@@ -39,30 +26,15 @@ app.use('/api', waitTimeRouter);
 app.use('/api', weatherRouter);
 app.use('/api', recommendationsRouter);
 app.use('/api', socialRouter);
-app.use('/api', photoReviewRouter);
 app.use('/api', gamificationRouter);
 app.use('/api', mealPlanningRouter);
-app.use('/api', hokiePassportRouter);
-app.use('/api', eventSpecialsRouter);
-app.use('/api', availabilityRouter);
 
 const PORT = process.env.PORT ?? 3000;
 
-connectRedis()
-  .then(() => {
-    startMenuPoller();
-    startRecencyWorker();
-    startTrendingWorker();
-    startWeatherPoller();
-    startAvailabilityWorker();
-    initWebSocketServer(httpServer);
-    httpServer.listen(PORT, () => {
-      console.log(`API server listening on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Failed to connect to Redis:', err);
-    process.exit(1);
-  });
+startMenuPoller();
+
+app.listen(PORT, () => {
+  console.log(`API server listening on port ${PORT}`);
+});
 
 export default app;

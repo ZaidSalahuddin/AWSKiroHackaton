@@ -54,7 +54,7 @@ export async function recomputeItemScore(menuItemId: string): Promise<number> {
   const score = recencyScore(ratings);
 
   await pool.query(
-    `UPDATE menu_item SET recency_score = $1, recency_score_updated_at = now() WHERE id = $2`,
+    `UPDATE menu_item SET recency_score = $1 WHERE id = $2`,
     [score, menuItemId]
   );
 

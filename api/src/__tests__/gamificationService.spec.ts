@@ -2,7 +2,7 @@
  * Tests for gamificationService pure helpers and property-based correctness.
  *
  * Feature: vt-dining-ranker
- * Properties covered: 30, 31, 32, 33, 34
+ * Properties covered: 28, 29, 30, 31, 32
  */
 
 import fc from 'fast-check';
@@ -56,12 +56,10 @@ describe('isFoodieExplorerEarned', () => {
   }
 
   it('returns false when fewer than 10 ratings', () => {
-    const ratings = makeRatings(9);
-    expect(isFoodieExplorerEarned(ratings)).toBe(false);
+    expect(isFoodieExplorerEarned(makeRatings(9))).toBe(false);
   });
 
   it('returns true when exactly 10 distinct items all on the same day', () => {
-    // All 10 on day 0 — same 7-day window
     const ratings = Array.from({ length: 10 }, (_, i) => ({
       date: base,
       itemId: `item-${i}`,
@@ -70,7 +68,6 @@ describe('isFoodieExplorerEarned', () => {
   });
 
   it('returns true when 10 distinct items spread across 7 days', () => {
-    // One per day for 7 days, then 3 more on day 6 (still within window)
     const ratings = [
       ...makeRatings(7, 0),
       { date: new Date(base.getTime() + 6 * DAY), itemId: 'item-7' },
@@ -81,11 +78,8 @@ describe('isFoodieExplorerEarned', () => {
   });
 
   it('returns false when 10 items but spread across more than 7 days', () => {
-    // One item per day for 10 days — no single 7-day window has 10 distinct items
-    const ratings = makeRatings(10, 0); // days 0–9
-    // Override so each is on a different day > 7 days apart
     const spread = Array.from({ length: 10 }, (_, i) => ({
-      date: new Date(base.getTime() + i * 2 * DAY), // every 2 days → 18 days total
+      date: new Date(base.getTime() + i * 2 * DAY),
       itemId: `item-${i}`,
     }));
     expect(isFoodieExplorerEarned(spread)).toBe(false);
@@ -94,13 +88,12 @@ describe('isFoodieExplorerEarned', () => {
   it('returns false when 10 ratings but only 9 distinct items (one duplicate)', () => {
     const ratings = [
       ...makeRatings(9, 0),
-      { date: new Date(base.getTime() + 1 * DAY), itemId: 'item-0' }, // duplicate
+      { date: new Date(base.getTime() + 1 * DAY), itemId: 'item-0' },
     ];
     expect(isFoodieExplorerEarned(ratings)).toBe(false);
   });
 
   it('returns true when window spans exactly 7 days (boundary inclusive)', () => {
-    // 9 items on day 0, plus item-9 on day 7 — window [day0, day0+7days] includes day 7
     const ratings = [
       ...Array.from({ length: 9 }, (_, i) => ({
         date: base,
@@ -116,25 +109,62 @@ describe('isFoodieExplorerEarned', () => {
   });
 });
 
+// ─── Unit tests: computeStreak (read-time computation) ───────────────────────
+
+/**
+ * Simulates the computeStreak logic from gamificationService.
+ * Counts consecutive calendar days ending today with >= 1 log.
+ */
+function simulateComputeStreak(logDates: string[], today: string): number {
+  if (logDates.length === 0) return 0;
+
+  // Deduplicate and sort descending
+  const dates = [...new Set(logDates)].sort((a, b) => b.localeCompare(a));
+
+  let streak = 0;
+  let expected = today;
+  for (const d of dates) {
+    if (d === expected) {
+      streak++;
+      const prev = new Date(expected);
+      prev.setDate(prev.getDate() - 1);
+      expected = prev.toISOString().slice(0, 10);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+describe('computeStreak (read-time)', () => {
+  it('returns 0 when no logs', () => {
+    expect(simulateComputeStreak([], '2024-06-10')).toBe(0);
+  });
+
+  it('returns 1 when only today has a log', () => {
+    expect(simulateComputeStreak(['2024-06-10'], '2024-06-10')).toBe(1);
+  });
+
+  it('returns 3 for three consecutive days ending today', () => {
+    expect(simulateComputeStreak(['2024-06-10', '2024-06-09', '2024-06-08'], '2024-06-10')).toBe(3);
+  });
+
+  it('returns 0 when most recent log is not today', () => {
+    expect(simulateComputeStreak(['2024-06-09', '2024-06-08'], '2024-06-10')).toBe(0);
+  });
+
+  it('breaks streak on gap', () => {
+    // Today + 2 days ago (gap on yesterday)
+    expect(simulateComputeStreak(['2024-06-10', '2024-06-08'], '2024-06-10')).toBe(1);
+  });
+
+  it('deduplicates multiple logs on same day', () => {
+    expect(simulateComputeStreak(['2024-06-10', '2024-06-10', '2024-06-09'], '2024-06-10')).toBe(2);
+  });
+});
+
 // ─── Helpers for property tests ───────────────────────────────────────────────
 
-/**
- * Simulates incrementStreak pure logic: returns new streak value.
- */
-function simulateIncrementStreak(currentStreak: number): number {
-  return currentStreak + 1;
-}
-
-/**
- * Simulates resetStreak pure logic: returns 0.
- */
-function simulateResetStreak(): number {
-  return 0;
-}
-
-/**
- * Simulates the leaderboard filter: exclude opted-out students, sort desc, take top 20.
- */
 function buildLeaderboard(
   students: Array<{ id: string; ratingCount: number; optedOut: boolean }>,
 ): Array<{ id: string; ratingCount: number }> {
@@ -144,18 +174,29 @@ function buildLeaderboard(
     .slice(0, 20);
 }
 
-// ─── Property 30: Streak increments on daily meal log ─────────────────────────
-// Feature: vt-dining-ranker, Property 30: Streak increments on daily meal log
+// ─── Property 28: Streak increments on daily meal log ─────────────────────────
+// Feature: vt-dining-ranker, Property 28: Streak increments on daily meal log
 // Validates: Requirements 12.1
 
-describe('Property 30: Streak increments on daily meal log', () => {
-  it('streak increases by exactly 1 when a meal is logged', () => {
+describe('Property 28: Streak increments on daily meal log', () => {
+  it('streak increases by exactly 1 when a new consecutive day is logged', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 999 }),
-        (currentStreak) => {
-          const newStreak = simulateIncrementStreak(currentStreak);
-          return newStreak === currentStreak + 1;
+        fc.integer({ min: 1, max: 100 }),
+        (existingDays) => {
+          // Build consecutive days ending yesterday
+          const today = '2024-06-10';
+          const dates: string[] = [];
+          for (let i = 1; i <= existingDays; i++) {
+            const d = new Date('2024-06-10');
+            d.setDate(d.getDate() - i);
+            dates.push(d.toISOString().slice(0, 10));
+          }
+          const streakBefore = simulateComputeStreak(dates, today);
+
+          // Add today
+          const streakAfter = simulateComputeStreak([today, ...dates], today);
+          return streakAfter === streakBefore + 1;
         },
       ),
       { numRuns: 100 },
@@ -169,9 +210,7 @@ describe('Property 30: Streak increments on daily meal log', () => {
         (streak) => {
           const badge = shouldAwardStreakBadge(streak);
           const milestones = [7, 30, 100];
-          if (milestones.includes(streak)) {
-            return badge !== null;
-          }
+          if (milestones.includes(streak)) return badge !== null;
           return badge === null;
         },
       ),
@@ -180,27 +219,24 @@ describe('Property 30: Streak increments on daily meal log', () => {
   });
 });
 
-// ─── Property 31: Foodie Explorer badge awarded correctly ─────────────────────
-// Feature: vt-dining-ranker, Property 31: Foodie Explorer badge awarded correctly
+// ─── Property 29: Foodie Explorer badge awarded correctly ─────────────────────
+// Feature: vt-dining-ranker, Property 29: Foodie Explorer badge awarded correctly
 // Validates: Requirements 12.3
 
-describe('Property 31: Foodie Explorer badge awarded correctly', () => {
+describe('Property 29: Foodie Explorer badge awarded correctly', () => {
   const DAY_MS = 24 * 60 * 60 * 1000;
 
   it('badge is awarded when ≥10 distinct items are rated within any 7-day window', () => {
     fc.assert(
       fc.property(
-        // Generate a base timestamp and 10+ distinct item IDs all within 7 days
         fc.date({ min: new Date('2020-01-01'), max: new Date('2024-12-31') }),
         fc.array(fc.uuid(), { minLength: 10, maxLength: 30 }),
         (baseDate, itemIds) => {
-          // Deduplicate item IDs
           const distinct = [...new Set(itemIds)];
-          if (distinct.length < 10) return true; // skip if not enough distinct after dedup
+          if (distinct.length < 10) return true;
 
-          // Place first 10 distinct items within a 6-day window (well within 7 days)
           const ratings = distinct.slice(0, 10).map((id, i) => ({
-            date: new Date(baseDate.getTime() + i * (6 * DAY_MS / 9)), // spread over 6 days
+            date: new Date(baseDate.getTime() + i * (6 * DAY_MS / 9)),
             itemId: id,
           }));
 
@@ -217,7 +253,6 @@ describe('Property 31: Foodie Explorer badge awarded correctly', () => {
         fc.date({ min: new Date('2020-01-01'), max: new Date('2024-01-01') }),
         fc.integer({ min: 10, max: 20 }),
         (baseDate, count) => {
-          // Place each item 8 days apart — no window can contain 10 distinct items
           const ratings = Array.from({ length: count }, (_, i) => ({
             date: new Date(baseDate.getTime() + i * 8 * DAY_MS),
             itemId: `item-${i}`,
@@ -235,7 +270,6 @@ describe('Property 31: Foodie Explorer badge awarded correctly', () => {
         fc.date({ min: new Date('2020-01-01'), max: new Date('2024-12-31') }),
         fc.integer({ min: 1, max: 9 }),
         (baseDate, distinctCount) => {
-          // Create 10 ratings but only `distinctCount` (< 10) distinct items
           const ratings = Array.from({ length: 10 }, (_, i) => ({
             date: new Date(baseDate.getTime() + i * DAY_MS),
             itemId: `item-${i % distinctCount}`,
@@ -248,11 +282,11 @@ describe('Property 31: Foodie Explorer badge awarded correctly', () => {
   });
 });
 
-// ─── Property 32: Leaderboard ordering and size ───────────────────────────────
-// Feature: vt-dining-ranker, Property 32: Leaderboard ordering and size
+// ─── Property 30: Leaderboard ordering and size ───────────────────────────────
+// Feature: vt-dining-ranker, Property 30: Leaderboard ordering and size
 // Validates: Requirements 12.4
 
-describe('Property 32: Leaderboard ordering and size', () => {
+describe('Property 30: Leaderboard ordering and size', () => {
   it('leaderboard contains at most 20 students', () => {
     fc.assert(
       fc.property(
@@ -264,10 +298,7 @@ describe('Property 32: Leaderboard ordering and size', () => {
           }),
           { minLength: 0, maxLength: 50 },
         ),
-        (students) => {
-          const board = buildLeaderboard(students);
-          return board.length <= 20;
-        },
+        (students) => buildLeaderboard(students).length <= 20,
       ),
       { numRuns: 100 },
     );
@@ -320,42 +351,43 @@ describe('Property 32: Leaderboard ordering and size', () => {
   });
 });
 
-// ─── Property 33: Streak resets to 0 on missed day ───────────────────────────
-// Feature: vt-dining-ranker, Property 33: Streak resets to 0 on missed day
+// ─── Property 31: Streak resets to 0 on missed day ───────────────────────────
+// Feature: vt-dining-ranker, Property 31: Streak resets to 0 on missed day
 // Validates: Requirements 12.5
 
-describe('Property 33: Streak resets to 0 on missed day', () => {
-  it('streak is exactly 0 after a reset regardless of previous value', () => {
+describe('Property 31: Streak resets to 0 on missed day', () => {
+  it('streak is 0 when most recent log is not today', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 10000 }),
-        (currentStreak) => {
-          const newStreak = simulateResetStreak();
-          return newStreak === 0;
+        fc.integer({ min: 1, max: 30 }),
+        (daysAgo) => {
+          const today = '2024-06-10';
+          const lastLog = new Date('2024-06-10');
+          lastLog.setDate(lastLog.getDate() - daysAgo);
+          const dates = [lastLog.toISOString().slice(0, 10)];
+          return simulateComputeStreak(dates, today) === 0;
         },
       ),
       { numRuns: 100 },
     );
   });
 
-  it('reset always produces 0, never a negative value', () => {
+  it('streak is never negative', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: 10000 }),
-        (_currentStreak) => {
-          return simulateResetStreak() >= 0;
-        },
+        fc.array(fc.string({ minLength: 10, maxLength: 10 }), { minLength: 0, maxLength: 10 }),
+        (dates) => simulateComputeStreak(dates, '2024-06-10') >= 0,
       ),
       { numRuns: 100 },
     );
   });
 });
 
-// ─── Property 34: Leaderboard opt-out preserves streak and badges ─────────────
-// Feature: vt-dining-ranker, Property 34: Leaderboard opt-out preserves streak and badges
+// ─── Property 32: Leaderboard opt-out preserves streak and badges ─────────────
+// Feature: vt-dining-ranker, Property 32: Leaderboard opt-out preserves streak and badges
 // Validates: Requirements 12.6
 
-describe('Property 34: Leaderboard opt-out preserves streak and badges', () => {
+describe('Property 32: Leaderboard opt-out preserves streak and badges', () => {
   it('opted-out student does not appear in leaderboard', () => {
     fc.assert(
       fc.property(
@@ -391,8 +423,6 @@ describe('Property 34: Leaderboard opt-out preserves streak and badges', () => {
           maxLength: 4,
         }),
         (streak, badges) => {
-          // Opting out is a flag on the student record; streak and badges are separate fields
-          // Simulating: opt-out flag does not mutate streak or badges
           const student = { streak, badges: [...new Set(badges)], leaderboard_opt_out: false };
           student.leaderboard_opt_out = true;
           return student.streak === streak && student.badges.length === [...new Set(badges)].length;

@@ -25,7 +25,7 @@ export async function register(
      VALUES ($1, $2, $3, $4)
      RETURNING id, vt_email, username, display_name, dietary_profile,
                nutrition_targets, leaderboard_opt_out, privacy_setting,
-               hokie_passport_connected, created_at`,
+               created_at`,
     [email, username, displayName, passwordHash],
   );
   const student = result.rows[0];
@@ -37,7 +37,7 @@ export async function login(email: string, password: string) {
   const result = await pool.query(
     `SELECT id, vt_email, username, display_name, password_hash, dietary_profile,
             nutrition_targets, leaderboard_opt_out, privacy_setting,
-            hokie_passport_connected, created_at
+            created_at
      FROM student WHERE vt_email = $1`,
     [email],
   );

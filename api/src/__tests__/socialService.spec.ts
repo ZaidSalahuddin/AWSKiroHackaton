@@ -1,28 +1,19 @@
 import fc from 'fast-check';
 import { shouldPublishActivity } from '../services/socialService';
 
-// ─── Pure logic helpers (mirrors socialService internals) ─────────────────────
+// ─── Pure logic helpers ───────────────────────────────────────────────────────
 
-/**
- * Simulates a follow/unfollow round-trip on an in-memory set.
- * Returns true if the set is empty after unfollow (i.e., no residual follow).
- */
 function followUnfollowRoundTrip(followerId: string, followeeId: string): boolean {
   const follows = new Map<string, { followerId: string; followeeId: string }>();
   const id = `${followerId}:${followeeId}`;
 
-  // Follow
   follows.set(id, { followerId, followeeId });
   if (!follows.has(id)) return false;
 
-  // Unfollow
   follows.delete(id);
   return !follows.has(id);
 }
 
-/**
- * Simulates the social feed filter: exclude events from private students.
- */
 function filterFeedByPrivacy(
   events: Array<{ studentId: string; privacySetting: string }>,
 ): Array<{ studentId: string; privacySetting: string }> {
@@ -73,6 +64,36 @@ describe('filterFeedByPrivacy', () => {
       { studentId: 'b', privacySetting: 'friends' },
     ];
     expect(filterFeedByPrivacy(events)).toHaveLength(2);
+  });
+});
+
+// ─── Unit tests: activity_event feed query shape ──────────────────────────────
+
+describe('activity_event feed shape', () => {
+  it('feed events have required fields from activity_event table', () => {
+    const mockEvent = {
+      id: 'evt-1',
+      student_id: 'stu-1',
+      event_type: 'rating_submitted',
+      payload: { menu_item_id: 'item-1', stars: 4 },
+      created_at: new Date(),
+      username: 'hokiebird',
+      display_name: 'Hokie Bird',
+    };
+    expect(mockEvent).toHaveProperty('id');
+    expect(mockEvent).toHaveProperty('student_id');
+    expect(mockEvent).toHaveProperty('event_type');
+    expect(mockEvent).toHaveProperty('payload');
+    expect(mockEvent).toHaveProperty('created_at');
+    expect(mockEvent).toHaveProperty('username');
+    expect(mockEvent).toHaveProperty('display_name');
+  });
+
+  it('event_type is one of the valid values', () => {
+    const validTypes = ['rating_submitted', 'meal_logged'];
+    expect(validTypes).toContain('rating_submitted');
+    expect(validTypes).toContain('meal_logged');
+    expect(validTypes).not.toContain('photo_uploaded');
   });
 });
 

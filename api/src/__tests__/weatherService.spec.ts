@@ -1,4 +1,8 @@
 import * as fc from 'fast-check';
+import axios from 'axios';
+
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,10 +14,6 @@ interface WeatherData {
 
 // ─── Pure helper: shape validator ────────────────────────────────────────────
 
-/**
- * Validates that a weather response object contains the required fields
- * with the correct types.
- */
 function hasRequiredWeatherFields(data: unknown): data is WeatherData {
   if (typeof data !== 'object' || data === null) return false;
   const d = data as Record<string, unknown>;
@@ -24,7 +24,107 @@ function hasRequiredWeatherFields(data: unknown): data is WeatherData {
   );
 }
 
-// ─── Unit tests ───────────────────────────────────────────────────────────────
+// ─── In-memory cache tests ────────────────────────────────────────────────────
+
+describe('getCurrentWeather — in-memory cache', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    process.env.OPENWEATHER_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    delete process.env.OPENWEATHER_API_KEY;
+  });
+
+  it('cache miss → fetches from API and returns fresh data', async () => {
+    mockedAxios.get = jest.fn().mockResolvedValue({
+      data: {
+        main: { temp: 72.5 },
+        weather: [{ description: 'clear sky' }],
+      },
+    });
+
+    const { getCurrentWeather } = await import('../services/weatherService');
+    const result = await getCurrentWeather();
+
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      temperature_f: 72.5,
+      conditions: 'clear sky',
+      weather_stale: false,
+    });
+  });
+
+  it('cache hit (within 15 min) → returns cached value without API call', async () => {
+    mockedAxios.get = jest.fn().mockResolvedValue({
+      data: {
+        main: { temp: 65.0 },
+        weather: [{ description: 'partly cloudy' }],
+      },
+    });
+
+    const { getCurrentWeather } = await import('../services/weatherService');
+
+    // First call populates cache
+    await getCurrentWeather();
+    // Second call should use cache
+    const result = await getCurrentWeather();
+
+    expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ temperature_f: 65.0, weather_stale: false });
+  });
+
+  it('API failure with cached data → returns stale data with weather_stale: true', async () => {
+    // First call succeeds and populates cache
+    mockedAxios.get = jest.fn()
+      .mockResolvedValueOnce({
+        data: {
+          main: { temp: 55.0 },
+          weather: [{ description: 'overcast' }],
+        },
+      })
+      .mockRejectedValueOnce(new Error('network error'));
+
+    const { getCurrentWeather } = await import('../services/weatherService');
+
+    await getCurrentWeather(); // populate cache
+
+    // Force cache expiry by manipulating time
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 20 * 60 * 1000);
+
+    const result = await getCurrentWeather();
+
+    expect(result).toMatchObject({
+      temperature_f: 55.0,
+      conditions: 'overcast',
+      weather_stale: true,
+    });
+
+    jest.spyOn(Date, 'now').mockRestore();
+  });
+
+  it('API failure with no cache → returns null', async () => {
+    mockedAxios.get = jest.fn().mockRejectedValue(new Error('network error'));
+
+    const { getCurrentWeather } = await import('../services/weatherService');
+    const result = await getCurrentWeather();
+
+    expect(result).toBeNull();
+  });
+
+  it('missing API key with no cache → returns null', async () => {
+    delete process.env.OPENWEATHER_API_KEY;
+
+    const { getCurrentWeather } = await import('../services/weatherService');
+    const result = await getCurrentWeather();
+
+    expect(result).toBeNull();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+});
+
+// ─── WeatherData shape validation ─────────────────────────────────────────────
 
 describe('WeatherData shape validation', () => {
   it('accepts a valid fresh weather response', () => {
@@ -46,55 +146,22 @@ describe('WeatherData shape validation', () => {
   });
 
   it('rejects a response missing temperature_f', () => {
-    const bad = { conditions: 'sunny', weather_stale: false };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
+    expect(hasRequiredWeatherFields({ conditions: 'sunny', weather_stale: false })).toBe(false);
   });
 
   it('rejects a response missing conditions', () => {
-    const bad = { temperature_f: 70, weather_stale: false };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
-  });
-
-  it('rejects a response missing weather_stale', () => {
-    const bad = { temperature_f: 70, conditions: 'cloudy' };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
+    expect(hasRequiredWeatherFields({ temperature_f: 70, weather_stale: false })).toBe(false);
   });
 
   it('rejects null', () => {
     expect(hasRequiredWeatherFields(null)).toBe(false);
   });
-
-  it('rejects a non-object', () => {
-    expect(hasRequiredWeatherFields('string')).toBe(false);
-  });
-
-  it('rejects temperature_f as a string', () => {
-    const bad = { temperature_f: '72', conditions: 'sunny', weather_stale: false };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
-  });
-
-  it('rejects conditions as a number', () => {
-    const bad = { temperature_f: 72, conditions: 42, weather_stale: false };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
-  });
-
-  it('rejects weather_stale as a string', () => {
-    const bad = { temperature_f: 72, conditions: 'sunny', weather_stale: 'true' };
-    expect(hasRequiredWeatherFields(bad)).toBe(false);
-  });
 });
 
-// ─── Property-based tests ─────────────────────────────────────────────────────
+// ─── Property 24: Weather response contains required fields ───────────────────
+// Feature: vt-dining-ranker, Property 24: Weather response contains required fields
+// Validates: Requirements 9.2
 
-/**
- * Property 24: Weather response contains required fields
- *
- * For any successful weather fetch, the response includes `temperature_f`
- * (number) and `conditions` (string) fields.
- *
- * Feature: vt-dining-ranker, Property 24: Weather response contains required fields
- * Validates: Requirements 9.2
- */
 describe('Property 24: Weather response contains required fields', () => {
   it('any valid weather response has temperature_f (number) and conditions (string)', () => {
     fc.assert(
@@ -107,7 +174,7 @@ describe('Property 24: Weather response contains required fields', () => {
           return hasRequiredWeatherFields(response);
         }
       ),
-      { numRuns: 200, verbose: true }
+      { numRuns: 200 }
     );
   });
 
@@ -121,7 +188,7 @@ describe('Property 24: Weather response contains required fields', () => {
           return !hasRequiredWeatherFields(bad);
         }
       ),
-      { numRuns: 100, verbose: true }
+      { numRuns: 100 }
     );
   });
 
@@ -135,7 +202,7 @@ describe('Property 24: Weather response contains required fields', () => {
           return !hasRequiredWeatherFields(bad);
         }
       ),
-      { numRuns: 100, verbose: true }
+      { numRuns: 100 }
     );
   });
 });

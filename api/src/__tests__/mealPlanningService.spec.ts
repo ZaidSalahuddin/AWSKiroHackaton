@@ -73,11 +73,39 @@ function simulateCompleteMealPlan(store: Map<string, MealPlanEntry>, id: string)
   return updated;
 }
 
-// ─── Property 35: Meal plan add round-trip ────────────────────────────────────
-// Feature: vt-dining-ranker, Property 35: Meal plan add round-trip
+// ─── Unit tests: getMealPlans / addMealPlan / completeMealPlan ────────────────
+
+describe('addMealPlan', () => {
+  it('adds entry with completed=false by default', () => {
+    const store = new Map<string, MealPlanEntry>();
+    const entry = simulateAddMealPlan(store, {
+      id: 'e1', studentId: 's1', menuItemId: 'm1', plannedDate: '2024-06-01', mealPeriod: 'lunch',
+    });
+    expect(entry.completed).toBe(false);
+  });
+});
+
+describe('completeMealPlan', () => {
+  it('marks entry as completed', () => {
+    const store = new Map<string, MealPlanEntry>();
+    simulateAddMealPlan(store, {
+      id: 'e1', studentId: 's1', menuItemId: 'm1', plannedDate: '2024-06-01', mealPeriod: 'lunch',
+    });
+    const result = simulateCompleteMealPlan(store, 'e1');
+    expect(result?.completed).toBe(true);
+  });
+
+  it('returns null for non-existent entry', () => {
+    const store = new Map<string, MealPlanEntry>();
+    expect(simulateCompleteMealPlan(store, 'nonexistent')).toBeNull();
+  });
+});
+
+// ─── Property 33: Meal plan add round-trip ────────────────────────────────────
+// Feature: vt-dining-ranker, Property 33: Meal plan add round-trip
 // Validates: Requirements 13.2
 
-describe('Property 35: Meal plan add round-trip', () => {
+describe('Property 33: Meal plan add round-trip', () => {
   it('added meal plan entry is retrievable for the same student', () => {
     fc.assert(
       fc.property(
@@ -124,11 +152,11 @@ describe('Property 35: Meal plan add round-trip', () => {
   });
 });
 
-// ─── Property 36: Completing a meal plan entry logs nutrition ─────────────────
-// Feature: vt-dining-ranker, Property 36: Completing a meal plan entry logs nutrition
+// ─── Property 34: Completing a meal plan entry logs nutrition ─────────────────
+// Feature: vt-dining-ranker, Property 34: Completing a meal plan entry logs nutrition
 // Validates: Requirements 13.5
 
-describe('Property 36: Completing a meal plan entry logs nutrition', () => {
+describe('Property 34: Completing a meal plan entry logs nutrition', () => {
   it('completing an entry sets completed=true', () => {
     fc.assert(
       fc.property(
@@ -154,8 +182,7 @@ describe('Property 36: Completing a meal plan entry logs nutrition', () => {
         fc.uuid(),
         (id) => {
           const store = new Map<string, MealPlanEntry>();
-          const result = simulateCompleteMealPlan(store, id);
-          return result === null;
+          return simulateCompleteMealPlan(store, id) === null;
         },
       ),
       { numRuns: 100 },

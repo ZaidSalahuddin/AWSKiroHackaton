@@ -1,5 +1,4 @@
 import { pool } from '../db/client';
-import { redis } from '../cache/redis';
 
 export interface TrendingItem {
   id: string;
@@ -10,11 +9,8 @@ export interface TrendingItem {
   rating_count_60min: number;
 }
 
-const CACHE_KEY = 'trending';
-const CACHE_TTL = 60; // seconds
-
-export async function computeTrendingFeed(): Promise<TrendingItem[]> {
-  const result = await pool.query<TrendingItem>(`
+export async function getTrendingFeed(): Promise<{ items: TrendingItem[]; insufficient_activity: boolean }> {
+  const result = await pool.query(`
     SELECT
       mi.id, mi.name, mi.dining_hall_id, dh.name as dining_hall_name,
       mi.recency_score,
@@ -28,20 +24,6 @@ export async function computeTrendingFeed(): Promise<TrendingItem[]> {
     ORDER BY COUNT(r.id) * mi.recency_score DESC
     LIMIT 10
   `);
-  return result.rows;
-}
-
-export async function getTrendingFeed(): Promise<{
-  items: TrendingItem[];
-  insufficient_activity: boolean;
-}> {
-  const cached = await redis.get(CACHE_KEY);
-  if (cached) {
-    const items: TrendingItem[] = JSON.parse(cached);
-    return { items, insufficient_activity: items.length < 3 };
-  }
-
-  const items = await computeTrendingFeed();
-  await redis.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(items));
+  const items = result.rows;
   return { items, insufficient_activity: items.length < 3 };
 }

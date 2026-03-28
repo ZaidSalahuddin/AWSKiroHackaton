@@ -38,8 +38,6 @@ export interface Student {
   nutrition_targets: NutritionTargets | null;
   leaderboard_opt_out: boolean;
   privacy_setting: 'public' | 'friends' | 'private';
-  hokie_passport_connected: boolean;
-  hokie_passport_token_enc: string | null;
   created_at: Date;
 }
 
@@ -62,8 +60,6 @@ export interface MenuItem {
   allergen_data_complete: boolean;
   nutrition: NutritionData | null;
   health_score: number | null;
-  recency_score: number;
-  recency_score_updated_at: Date;
 }
 
 export interface Rating {
@@ -75,14 +71,6 @@ export interface Rating {
   meal_period: 'breakfast' | 'lunch' | 'dinner' | 'late_night';
   meal_date: string;
   check_in_verified: boolean;
-  created_at: Date;
-}
-
-export interface PhotoReview {
-  id: string;
-  rating_id: string;
-  storage_url: string;
-  status: 'visible' | 'hidden' | 'removed';
   created_at: Date;
 }
 
@@ -135,29 +123,10 @@ export interface Badge {
   awarded_at: Date;
 }
 
-export interface EventSpecial {
-  id: string;
-  dining_hall_id: string;
-  title: string;
-  description: string;
-  event_date: string;
-  meal_period: 'breakfast' | 'lunch' | 'dinner' | 'late_night';
-  created_by: string;
-  created_at: Date;
-}
-
-export interface AvailabilityLog {
-  id: string;
-  menu_item_id: string;
-  dining_hall_id: string;
-  appeared_on: string;
-  meal_period: 'breakfast' | 'lunch' | 'dinner' | 'late_night';
-  logged_at: Date;
-}
-
-export interface AvailabilitySubscription {
+export interface ActivityEvent {
   id: string;
   student_id: string;
-  menu_item_id: string;
+  event_type: 'rating_submitted' | 'meal_logged';
+  payload: Record<string, unknown>;
   created_at: Date;
 }

@@ -2,10 +2,6 @@ import fc from 'fast-check';
 
 // ─── Pure logic extracted from ratingService for unit testing ─────────────────
 
-/**
- * Validates check-in requirement (mirrors ratingService.submitRating logic).
- * Returns true if the submission is allowed, false otherwise.
- */
 function isCheckInValid(opts: {
   confirmConsumed?: boolean;
   checkInVerified?: boolean;
@@ -29,7 +25,7 @@ describe('check-in validation logic', () => {
   });
 
   it('allows submission with check-in within 90 min', () => {
-    const checkInTimestamp = new Date(now.getTime() - 30 * 60 * 1000); // 30 min ago
+    const checkInTimestamp = new Date(now.getTime() - 30 * 60 * 1000);
     expect(isCheckInValid({ checkInVerified: true, checkInTimestamp, now })).toBe(true);
   });
 
@@ -52,7 +48,45 @@ describe('check-in validation logic', () => {
   });
 });
 
+// ─── recomputeItemScore is called after rating submission ─────────────────────
+
+describe('submitRating calls recomputeItemScore synchronously', () => {
+  it('recomputeItemScore is invoked after a successful rating insert', async () => {
+    const { pool } = require('../db/client');
+    const recencyEngine = require('../services/recencyScoreEngine');
+
+    const mockRating = {
+      id: 'r1', student_id: 's1', menu_item_id: 'm1', stars: 4,
+      meal_period: 'lunch', meal_date: '2024-06-01', check_in_verified: true,
+    };
+
+    jest.spyOn(pool, 'query').mockImplementation((sql: string) => {
+      if (sql.includes('INSERT INTO rating')) return Promise.resolve({ rows: [mockRating] });
+      if (sql.includes('INSERT INTO activity_event')) return Promise.resolve({ rows: [] });
+      return Promise.resolve({ rows: [] });
+    });
+
+    const recomputeSpy = jest.spyOn(recencyEngine, 'recomputeItemScore').mockResolvedValue(3.5);
+
+    const { submitRating } = require('../services/ratingService');
+    await submitRating({
+      studentId: 's1',
+      menuItemId: 'm1',
+      stars: 4,
+      mealPeriod: 'lunch',
+      mealDate: '2024-06-01',
+      checkInVerified: true,
+      confirmConsumed: true,
+    });
+
+    expect(recomputeSpy).toHaveBeenCalledWith('m1');
+
+    jest.restoreAllMocks();
+  });
+});
+
 // ─── Property 6: Rating submission requires check-in or confirmation ──────────
+// Feature: vt-dining-ranker, Property 6: Rating submission requires check-in or confirmation
 // Validates: Requirements 2.4
 
 describe('Property 6: Rating submission requires check-in or confirmation', () => {
@@ -108,8 +142,8 @@ describe('Property 6: Rating submission requires check-in or confirmation', () =
 });
 
 // ─── Property 7: One rating per item per meal period ─────────────────────────
+// Feature: vt-dining-ranker, Property 7: One rating per item per meal period
 // Validates: Requirements 2.6
-// This property is enforced by a DB unique constraint; we test the key logic here.
 
 describe('Property 7: One rating per item per meal period', () => {
   it('a (student_id, menu_item_id, meal_period, meal_date) tuple uniquely identifies a rating', () => {
@@ -122,7 +156,6 @@ describe('Property 7: One rating per item per meal period', () => {
           mealDate: fc.date({ min: new Date('2024-01-01'), max: new Date('2025-12-31') }),
         }),
         ({ studentId, menuItemId, mealPeriod, mealDate }) => {
-          // Two ratings with the same key are duplicates
           const key1 = `${studentId}:${menuItemId}:${mealPeriod}:${mealDate.toISOString().split('T')[0]}`;
           const key2 = `${studentId}:${menuItemId}:${mealPeriod}:${mealDate.toISOString().split('T')[0]}`;
           return key1 === key2;

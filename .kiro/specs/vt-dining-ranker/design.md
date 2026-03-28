@@ -2,7 +2,7 @@
 
 ## Overview
 
-VT Dining Ranker is a web application (React Native or React + Expo) that gives Virginia Tech students a real-time, personalized view of campus dining. The system aggregates menu data from VT Dining Services, crowdsourced ratings and wait-time reports, nutritional data, weather conditions, and meal plan balances to surface the best food available right now.
+VT Dining Ranker is a mobile-first web application (React Native + Expo) that gives Virginia Tech students a real-time, personalized view of campus dining. The system aggregates menu data from VT Dining Services, crowdsourced ratings and wait-time reports, nutritional data, and weather conditions to surface the best food available right now.
 
 The core value loop is:
 1. Students open the app and immediately see what's good, what's trending, and how long the wait is.
@@ -13,56 +13,52 @@ The core value loop is:
 ### Key Design Decisions
 
 - **Recency-weighted ranking** over simple averages — freshness of ratings matters more than historical averages for a dining context where menus change daily.
+- **Synchronous computation** — recency scores and trending feeds are computed on every request directly from PostgreSQL; no background workers or caches needed at this scale.
 - **Crowdsourced wait times** with sensor augmentation — no dedicated hardware required, but sensor data improves accuracy where available.
 - **Dietary filtering at the query layer** — filters are applied server-side before results reach the client, preventing accidental exposure of unsafe items.
 - **Privacy-first social layer** — activity visibility defaults to friends-only; private mode fully excludes a student from all feeds.
+- **In-memory weather cache** — weather data is fetched on-demand from OpenWeatherMap and cached in a module-level variable with a 15-minute TTL; no external cache store required.
 
 ---
 
 ## Architecture
 
-The system follows a client–server architecture with a real-time layer for live updates.
+The system follows a straightforward client–server architecture. The client polls REST endpoints; there is no WebSocket layer.
 
 ```mermaid
 graph TD
     Client["Mobile/Web Client\n(React Native / Expo)"]
-    API["REST + WebSocket API\n(Node.js / Express)"]
-    DB[("PostgreSQL\n(primary data store)")]
-    Cache["Redis\n(rankings, sessions, weather cache)"]
-    Queue["Message Queue\n(BullMQ / Redis)"]
-    NotifSvc["Notification Service\n(FCM / APNs)"]
+    API["REST API\n(Node.js / Express)"]
+    DB[("PostgreSQL\n(only data store)")]
     WeatherSvc["Weather Service\n(OpenWeatherMap)"]
-    MealPlanSvc["Meal Plan Service\n(Hokie Passport API)"]
     VTDining["VT Dining Services\n(menu data source)"]
-    MediaStore["Object Storage\n(S3-compatible, photo reviews)"]
 
-    Client -->|HTTPS REST| API
-    Client -->|WebSocket| API
+    Client -->|HTTPS REST + polling| API
     API --> DB
-    API --> Cache
-    API --> Queue
-    Queue --> NotifSvc
-    API -->|poll every 15 min| WeatherSvc
-    API -->|poll / webhook| VTDining
-    API -->|on-demand + daily| MealPlanSvc
-    API -->|upload / serve| MediaStore
+    API -->|on-demand, 15-min in-memory TTL| WeatherSvc
+    API -->|poll every 5 min| VTDining
 ```
 
-### Real-Time Strategy
+### Polling Strategy
 
-- **Rankings and trending feed**: Server pushes updates over WebSocket every 30 seconds (rankings) and 60 seconds (trending feed). Clients subscribe to a channel per dining hall.
-- **Social feed**: New friend activity is pushed via WebSocket within 60 seconds of the triggering event.
-- **Notifications**: Meal plan reminders and menu-change alerts are dispatched through a background job queue to FCM/APNs.
+- **Rankings**: Client polls `GET /api/dining-halls/:id/ranked-items` every 30 seconds.
+- **Trending feed**: Client polls `GET /api/trending` every 60 seconds.
+- **Social feed**: Client polls `GET /api/social-feed` every 60 seconds.
+- **Wait times**: Client polls `GET /api/dining-halls/:id/wait-time` on screen focus.
 
 ### Caching Strategy
 
-| Data | Cache TTL | Rationale |
+There is no external cache layer. All data is served directly from PostgreSQL.
+
+The single exception is weather data: the weather module holds a module-level variable `{ data, fetchedAt }`. On each request that needs weather, if `now - fetchedAt < 15 minutes` the cached value is returned; otherwise a fresh fetch from OpenWeatherMap is made and the variable is updated. This requires no Redis or external infrastructure.
+
+| Data | Strategy | Rationale |
 |---|---|---|
-| Recency scores | 30 s | Updated on every new rating; stale reads acceptable within window |
-| Trending feed | 60 s | Refreshed on schedule |
-| Weather data | 15 min | Per requirement 9.1 |
-| Menu data | 5 min | Per requirement 1.3 |
-| Meal plan balance | 24 h | Per requirement 14.3 |
+| Menu data | Direct Postgres query | Menus change infrequently; query is fast |
+| Recency scores | Computed on request | Synchronous aggregation over recent ratings |
+| Trending feed | Computed on request | Simple COUNT + score query over past 60 min |
+| Weather data | In-memory module variable, 15-min TTL | Avoids hammering OpenWeatherMap; no Redis needed |
+| Wait times | Direct Postgres query | Weighted average over past 30 min |
 
 ---
 
@@ -70,7 +66,7 @@ graph TD
 
 ### 1. Menu Service
 
-Responsible for fetching, caching, and serving menu data from VT Dining Services.
+Responsible for fetching, storing, and serving menu data from VT Dining Services.
 
 ```
 GET /api/dining-halls                          → list of dining halls with open/closed status
@@ -79,8 +75,8 @@ GET /api/dining-halls/:id/menu?date=&period=   → future menu for meal planning
 GET /api/menu-items/:id                        → item detail (name, description, ingredients, allergens, health score, nutrition)
 ```
 
-- Polls VT Dining Services every 5 minutes; diffs against cached version and emits `menu.updated` events.
-- On unavailability, returns cached data with a `stale: true` flag; clients render "Menu unavailable" when no cache exists.
+- Polls VT Dining Services every 5 minutes; diffs against stored version and upserts changed rows.
+- On unavailability, returns the most recently stored data with a `stale: true` flag; returns `{ available: false }` per dining hall when no data exists at all.
 
 ### 2. Rating Service
 
@@ -89,25 +85,24 @@ Handles rating submission, validation, and Recency_Score computation.
 ```
 POST /api/ratings                              → submit a rating (requires check-in or confirmation)
 GET  /api/menu-items/:id/ratings               → paginated ratings for an item
-GET  /api/dining-halls/:id/ranked-items        → ranked list sorted by Recency_Score
+GET  /api/dining-halls/:id/ranked-items        → ranked list sorted by Recency_Score (computed on request)
 ```
 
 - Validates: student checked in within 90 min OR explicit confirmation; one rating per item per meal period.
-- After recording a rating, enqueues a `recency.recompute` job for the affected item.
-- Recency_Score recomputation runs within 10 seconds via the queue worker.
+- After recording a rating, the updated recency score is available immediately on the next ranked-items request (no async job needed).
 
 ### 3. Recency Score Engine
 
-Computes time-decayed composite scores.
+Computes time-decayed composite scores synchronously on every ranked-list request.
 
 ```
 recency_score(item) = Σ [ rating_i * decay(t_i) ]  /  Σ [ decay(t_i) ]
 
 decay(t) = exp(-λ * t_hours)
-  where λ is chosen so that decay(6h) ≤ 0.5 * decay(0h)  →  λ = ln(2)/6 ≈ 0.1155
+  where λ = ln(2)/6 ≈ 0.1155
 ```
 
-This ensures ratings within the past 60 minutes carry at least twice the weight of ratings older than 6 hours (requirement 2.2).
+This ensures ratings within the past 60 minutes carry at least twice the weight of ratings older than 6 hours (requirement 2.2). The computation runs as a SQL expression over the `RATING` table filtered to the current meal period.
 
 ### 4. Trending Feed Service
 
@@ -115,14 +110,14 @@ This ensures ratings within the past 60 minutes carry at least twice the weight 
 GET /api/trending                              → top 10 items by rating activity in past 60 min
 ```
 
-- Runs a scheduled job every 60 seconds; queries items with ≥1 rating in the past 60 minutes, sorts by count × recency_score, takes top 10.
-- Returns `{ items: [], insufficient_activity: bool }` — `insufficient_activity: true` when fewer than 3 items qualify.
+- Computed on every request: queries items with ≥1 rating in the past 60 minutes, sorts by `count × recency_score`, takes top 10.
+- Returns `{ items: [], insufficient_activity: true }` when fewer than 3 items qualify.
 
 ### 5. Dietary Filter Service
 
-Applied as middleware on any endpoint returning menu items.
+Applied as Express middleware on any endpoint returning menu items.
 
-- Reads the student's active `Dietary_Profile` from the session/token.
+- Reads the student's active `Dietary_Profile` from the JWT.
 - Excludes items that conflict with restrictions before the response is serialized.
 - Items with incomplete allergen data are excluded by default; included only if `opt_in_incomplete_allergens: true` is set on the profile.
 - Allergen warnings are injected into item detail responses when a match is found.
@@ -157,11 +152,31 @@ POST /api/wait-time-reports                    → submit crowdsourced wait time
 GET  /api/dining-halls/:id/wait-time           → current estimate
 ```
 
-- Weighted average of reports in the past 30 minutes (exponential decay by age).
+- Weighted average of reports in the past 30 minutes (exponential decay by age), computed on request.
 - Sensor data (where available) is treated as a high-weight report.
 - Returns `{ minutes: null, unknown: true }` when no data in 30 min and no sensor data.
 
-### 9. Recommendation Engine
+### 9. Weather Service
+
+```typescript
+// Module-level in-memory cache — no Redis required
+let weatherCache: { data: WeatherData; fetchedAt: number } | null = null;
+
+async function getCurrentWeather(): Promise<WeatherData> {
+  const now = Date.now();
+  if (weatherCache && now - weatherCache.fetchedAt < 15 * 60 * 1000) {
+    return weatherCache.data;
+  }
+  const data = await fetchFromOpenWeatherMap();
+  weatherCache = { data, fetchedAt: now };
+  return data;
+}
+```
+
+- Called on-demand by the Recommendation Engine and the home screen endpoint.
+- Returns `{ temperature_f, conditions, stale: true }` when the external service is unavailable and a cached value exists.
+
+### 10. Recommendation Engine
 
 ```
 GET /api/recommendations?input=               → personalized recommendations
@@ -169,34 +184,24 @@ GET /api/recommendations?input=               → personalized recommendations
 
 Scoring pipeline:
 1. Filter: available now + satisfies dietary profile.
-2. Score: `base_score = recency_score * 0.4 + rating_history_affinity * 0.3 + cuisine_preference_match * 0.2 + weather_boost * 0.1`
-3. Weather boost: +20% weight on warm/comfort items when temp < 35°F or precipitation; +20% on cold/light items when temp > 85°F.
-4. Natural language input (e.g., "something spicy") is parsed into tags and used to filter/re-rank.
-5. If no results satisfy all filters, iteratively relax one filter at a time and notify the student.
+2. Fetch current weather via `getCurrentWeather()` (uses in-memory cache).
+3. Score: `base_score = recency_score * 0.4 + rating_history_affinity * 0.3 + cuisine_preference_match * 0.2 + weather_boost * 0.1`
+4. Weather boost: +20% weight on warm/comfort items when temp < 35°F or precipitation; +20% on cold/light items when temp > 85°F.
+5. Natural language input (e.g., "something spicy") is parsed into tags and used to filter/re-rank.
+6. If no results satisfy all filters, iteratively relax one filter at a time and notify the student.
 
-### 10. Social Service
+### 11. Social Service
 
 ```
 POST /api/follows                              → follow a student
 DELETE /api/follows/:id                        → unfollow
-GET  /api/social-feed                          → paginated activity feed
+GET  /api/social-feed                          → paginated activity feed (client polls every 60 s)
 PUT  /api/privacy-settings                     → set visibility (public | friends | private)
 ```
 
-- Activity events (rating submitted, meal logged) are published to a fan-out queue.
-- Fan-out respects privacy settings: private users' events are dropped before fan-out.
-- Feed updates pushed to followers via WebSocket within 60 seconds.
-
-### 11. Photo Review Service
-
-```
-POST /api/ratings/:id/photo                    → upload photo (multipart, JPEG/PNG, ≤10 MB)
-POST /api/photos/:id/report                    → report inappropriate photo
-```
-
-- Photos stored in S3-compatible object storage; CDN-served.
-- On report: photo hidden within 5 minutes (status set to `hidden`); moderation job queued.
-- Photo appears on item detail page within 30 seconds of upload (WebSocket push).
+- Activity events (rating submitted, meal logged) are written to an `ACTIVITY_EVENT` table at write time.
+- Feed query joins `FOLLOW` with `ACTIVITY_EVENT`, filtered by privacy settings.
+- Private users' events are excluded at query time.
 
 ### 12. Gamification Service
 
@@ -205,8 +210,8 @@ GET /api/students/:id/gamification             → streak, badges, leaderboard r
 GET /api/leaderboard/weekly                    → top 20 by ratings this week
 ```
 
-- Streak incremented by a daily cron job that checks if the student logged a meal that calendar day.
-- Badge awards triggered by event listeners on meal-log and rating events.
+- Streak is computed at read time from the `MEAL_LOG` table (consecutive calendar days with ≥1 log).
+- Badge awards are triggered synchronously when a meal log or rating is submitted (checked inline in the service layer).
 - Leaderboard opt-out flag stored on student profile; opted-out students excluded from leaderboard queries.
 
 ### 13. Meal Planning Service
@@ -217,61 +222,8 @@ POST /api/meal-plans                           → add item to plan
 PUT  /api/meal-plans/:id/complete              → mark as completed (auto-logs nutrition)
 ```
 
-- Scheduled notification jobs created when a meal plan entry is saved.
-- Menu-change events trigger a check against all meal plan entries for the affected item; notifications dispatched if a match is found.
-
-### 14. Meal Plan (Hokie Passport) Service
-
-```
-GET /api/hokie-passport/balance                → current swipes + dining dollars
-POST /api/hokie-passport/connect               → link Hokie Passport account
-POST /api/hokie-passport/refresh               → manual refresh
-```
-
-- Polls Meal_Plan_Service daily; on-demand on manual refresh.
-- Caches last known balance; returns with `stale: true` flag when service is unavailable.
-- Low-balance warning (< 5 swipes) computed at read time.
-
-### 15. Event Specials Service
-
-```
-POST /api/event-specials                       → publish special (staff only)
-GET  /api/dining-halls/:id/specials            → active specials for a hall
-```
-
-- Staff role required for publishing.
-- Special announcements appear in the dining hall page and are injected into the Trending_Feed.
-- Notification dispatched to students who have favorited the dining hall.
-
-### 16. Availability History and Prediction Service
-
-Tracks every menu appearance and predicts future availability using recurrence pattern analysis.
-
-```
-GET /api/menu-items/:id/availability-history   → full appearance log (date, meal_period, dining_hall)
-GET /api/menu-items/:id/availability-prediction → predicted next appearance(s)
-POST /api/menu-items/:id/subscribe             → subscribe to availability notifications
-DELETE /api/menu-items/:id/subscribe           → unsubscribe
-```
-
-- Every time the Menu Service ingests a menu, it upserts an `AVAILABILITY_LOG` record for each item present.
-- Prediction algorithm:
-  1. Group historical appearances by `(day_of_week, meal_period, dining_hall_id)`.
-  2. Compute appearance frequency per group over the trailing 90 days.
-  3. Groups with ≥ 4 appearances are considered recurring patterns.
-  4. The predicted next occurrence is the nearest future `(day_of_week, meal_period)` whose frequency exceeds a configurable threshold (default: ≥ 25% of weeks in the window).
-  5. If fewer than 4 total appearances exist, return `{ prediction_available: false }`.
-- Predictions are recomputed daily via a scheduled job.
-- When a prediction indicates an item is likely within 24 hours, a `availability_prediction` notification job is enqueued for all subscribers.
-- When the item appears on a confirmed upcoming menu, an `availability_confirmed` notification is sent regardless of prediction state.
-
-### 17. Notification Service
-
-Centralized dispatcher for all push notifications.
-
-- Consumes jobs from the message queue.
-- Sends via FCM (Android) and APNs (iOS).
-- Job types: `meal_plan_reminder`, `menu_change`, `streak_broken`, `badge_awarded`, `event_special`, `social_activity`, `availability_prediction`, `availability_confirmed`.
+- Stores planned meals in `MEAL_PLAN_ENTRY`. No push notifications — students check the app to see their plan.
+- On complete: auto-logs nutrition to `MEAL_LOG` for that date.
 
 ---
 
@@ -289,8 +241,6 @@ erDiagram
         jsonb nutrition_targets
         boolean leaderboard_opt_out
         string privacy_setting
-        boolean hokie_passport_connected
-        string hokie_passport_token_enc
         timestamp created_at
     }
 
@@ -313,8 +263,7 @@ erDiagram
         boolean allergen_data_complete
         jsonb nutrition
         float health_score
-        float recency_score
-        timestamp recency_score_updated_at
+        timestamp created_at
     }
 
     RATING {
@@ -328,14 +277,6 @@ erDiagram
         timestamp created_at
     }
 
-    PHOTO_REVIEW {
-        uuid id PK
-        uuid rating_id FK
-        string storage_url
-        string status
-        timestamp created_at
-    }
-
     MEAL_LOG {
         uuid id PK
         uuid student_id FK
@@ -343,6 +284,7 @@ erDiagram
         string meal_period
         jsonb items
         jsonb nutrition_totals
+        boolean deleted
         timestamp created_at
     }
 
@@ -379,30 +321,11 @@ erDiagram
         timestamp awarded_at
     }
 
-    EVENT_SPECIAL {
-        uuid id PK
-        uuid dining_hall_id FK
-        string title
-        string description
-        date event_date
-        string meal_period
-        uuid created_by FK
-        timestamp created_at
-    }
-
-    AVAILABILITY_LOG {
-        uuid id PK
-        uuid menu_item_id FK
-        uuid dining_hall_id FK
-        date appeared_on
-        string meal_period
-        timestamp logged_at
-    }
-
-    AVAILABILITY_SUBSCRIPTION {
+    ACTIVITY_EVENT {
         uuid id PK
         uuid student_id FK
-        uuid menu_item_id FK
+        string event_type
+        jsonb payload
         timestamp created_at
     }
 
@@ -412,14 +335,11 @@ erDiagram
     STUDENT ||--o{ MEAL_PLAN_ENTRY : plans
     STUDENT ||--o{ FOLLOW : follows
     STUDENT ||--o{ BADGE : earns
+    STUDENT ||--o{ ACTIVITY_EVENT : generates
     DINING_HALL ||--o{ MENU_ITEM : offers
     DINING_HALL ||--o{ WAIT_TIME_REPORT : receives
-    DINING_HALL ||--o{ EVENT_SPECIAL : publishes
     MENU_ITEM ||--o{ RATING : receives
     MENU_ITEM ||--o{ MEAL_PLAN_ENTRY : planned_in
-    MENU_ITEM ||--o{ AVAILABILITY_LOG : logged_in
-    MENU_ITEM ||--o{ AVAILABILITY_SUBSCRIPTION : subscribed_by
-    RATING ||--o| PHOTO_REVIEW : has
 ```
 
 ### Key Schema Notes
@@ -427,10 +347,11 @@ erDiagram
 - `MENU_ITEM.nutrition` is a JSONB blob: `{ calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, added_sugar_g }`.
 - `MENU_ITEM.allergens` is a JSONB array of allergen tag strings.
 - `MEAL_LOG.items` is a JSONB array of `{ menu_item_id, servings }`.
+- `MEAL_LOG.deleted` is a soft-delete flag; rows are excluded from queries after 90 days.
 - `STUDENT.dietary_profile` is a JSONB object: `{ restrictions: string[], allergens: string[], active: bool, opt_in_incomplete: bool }`.
 - `WAIT_TIME_REPORT.source` is `"crowdsource"` or `"sensor"`.
-- `PHOTO_REVIEW.status` is one of `"visible"`, `"hidden"`, `"removed"`.
-
+- `ACTIVITY_EVENT.event_type` is one of `"rating_submitted"` or `"meal_logged"`.
+- `ACTIVITY_EVENT.payload` contains enough data to render the feed item (item name, dining hall, stars, etc.) without additional joins.
 
 ---
 
@@ -654,23 +575,7 @@ erDiagram
 
 ---
 
-### Property 28: Photo upload validation
-
-*For any* image file, if it is not JPEG or PNG format, or if its size exceeds 10 MB, the upload should be rejected; if it is JPEG or PNG and ≤ 10 MB, it should be accepted.
-
-**Validates: Requirements 11.2**
-
----
-
-### Property 29: Reported photo is hidden
-
-*For any* photo review that has been reported, its `status` field should be `hidden` (not `visible`).
-
-**Validates: Requirements 11.5**
-
----
-
-### Property 30: Streak increments on daily meal log
+### Property 28: Streak increments on daily meal log
 
 *For any* student who logs at least one meal on a new calendar day (after having logged on the previous day), their streak should increase by exactly 1.
 
@@ -678,7 +583,7 @@ erDiagram
 
 ---
 
-### Property 31: Foodie Explorer badge awarded correctly
+### Property 29: Foodie Explorer badge awarded correctly
 
 *For any* student who rates exactly 10 or more distinct menu items they have not previously rated within any 7-day window, the "Foodie Explorer" badge should be awarded.
 
@@ -686,7 +591,7 @@ erDiagram
 
 ---
 
-### Property 32: Leaderboard ordering and size
+### Property 30: Leaderboard ordering and size
 
 *For any* weekly leaderboard, it should contain at most 20 students, sorted in descending order by number of ratings submitted that week.
 
@@ -694,7 +599,7 @@ erDiagram
 
 ---
 
-### Property 33: Streak resets to 0 on missed day
+### Property 31: Streak resets to 0 on missed day
 
 *For any* student who misses a calendar day without logging a meal, their streak should be 0 after the reset.
 
@@ -702,7 +607,7 @@ erDiagram
 
 ---
 
-### Property 34: Leaderboard opt-out preserves streak and badges
+### Property 32: Leaderboard opt-out preserves streak and badges
 
 *For any* student who opts out of the leaderboard, (a) they should not appear in leaderboard results, and (b) their streak count and badge list should be unchanged.
 
@@ -710,7 +615,7 @@ erDiagram
 
 ---
 
-### Property 35: Meal plan add round-trip
+### Property 33: Meal plan add round-trip
 
 *For any* menu item added to a student's meal plan for a specific date and meal period, retrieving the meal plan should include that item for that date and period.
 
@@ -718,7 +623,7 @@ erDiagram
 
 ---
 
-### Property 36: Completing a meal plan entry logs nutrition
+### Property 34: Completing a meal plan entry logs nutrition
 
 *For any* meal plan entry marked as completed, the student's nutritional log for that date should include the nutrition data of the planned menu item.
 
@@ -726,79 +631,18 @@ erDiagram
 
 ---
 
-### Property 37: Meal plan balance display
-
-*For any* student with a connected Hokie Passport account, the home screen response should include `meal_swipes_remaining` and `dining_dollars_balance` fields; if `meal_swipes_remaining < 5`, the response should include `low_balance_warning: true`.
-
-**Validates: Requirements 14.1, 14.2**
-
----
-
-### Property 38: Event special appears in dining hall page and trending feed
-
-*For any* published event special, it should appear in both the corresponding dining hall's specials list and in the trending feed response.
-
-**Validates: Requirements 15.2**
-
----
-
-### Property 39: Event special has distinct indicator
-
-*For any* event special in any response, it should include a `is_event_special: true` field to distinguish it from regular menu items.
-
-**Validates: Requirements 15.4**
-
----
-
-### Property 40: Availability log records every menu appearance
-
-*For any* menu item that appears in a menu ingestion, an `AVAILABILITY_LOG` record should exist for that item, dining hall, date, and meal period after ingestion completes.
-
-**Validates: Requirements 17.1**
-
----
-
-### Property 41: Availability prediction requires minimum history
-
-*For any* menu item with fewer than 4 historical appearances, the prediction endpoint should return `{ prediction_available: false }`.
-
-**Validates: Requirements 17.6**
-
----
-
-### Property 42: Availability prediction is based on recurrence patterns
-
-*For any* menu item with 4 or more appearances, the predicted next occurrence should correspond to a `(day_of_week, meal_period)` group that appears in the item's historical log.
-
-**Validates: Requirements 17.4**
-
----
-
-### Property 43: Subscription round-trip
-
-*For any* student who subscribes to a menu item, the subscription should exist; after unsubscribing, it should no longer exist.
-
-**Validates: Requirements 17.7**
-
----
-
 ## Error Handling
 
 | Scenario | Behavior |
 |---|---|
-| VT Dining Services unavailable | Return cached menu with `stale: true`; if no cache, return `{ available: false, message: "Menu unavailable" }` per dining hall |
-| Weather Service unavailable | Use cached weather data; include `weather_stale: true` in response |
-| Meal Plan Service unavailable | Use cached balance; include `balance_stale: true` in response |
+| VT Dining Services unavailable | Return most recently stored menu with `stale: true`; if no data exists, return `{ available: false, message: "Menu unavailable" }` per dining hall |
+| Weather Service unavailable | Use in-memory cached weather data; include `weather_stale: true` in response |
 | Rating submitted without check-in | Return `400 Bad Request` with `error: "check_in_required"` |
 | Duplicate rating in same meal period | Return `409 Conflict` with `error: "already_rated"` |
-| Photo upload exceeds 10 MB or wrong format | Return `422 Unprocessable Entity` with `error: "invalid_photo"` |
 | Recommendation with no matching items | Return progressive filter relaxation suggestions; never return an empty list without explanation |
 | Trending feed with < 3 active items | Return `{ items: [], insufficient_activity: true }` |
 | No wait time data in past 30 min | Return `{ minutes: null, unknown: true }` |
 | Nutritional data missing for item | Return `{ health_score: null, nutrition_unavailable: true }` |
-| Staff attempts to publish special without authorization | Return `403 Forbidden` |
-| Availability prediction requested with < 4 appearances | Return `{ prediction_available: false, message: "Not enough history to predict" }` |
-| WebSocket connection lost | Client reconnects with exponential backoff; server replays last known state on reconnect |
 
 ---
 
@@ -840,11 +684,11 @@ it('decay(0) / decay(6h) >= 2 for all valid lambda', () => {
 
 Unit tests should focus on:
 - Specific examples that demonstrate correct behavior (e.g., badge award at exactly 7-day streak milestone).
-- Integration points between components (e.g., rating submission triggers recency score recomputation job).
-- Edge cases: empty trending feed, missing nutritional data, unavailable external services.
-- Error conditions: invalid photo format, duplicate rating, unauthorized staff action.
+- Integration points between components (e.g., rating submission triggers synchronous recency score update).
+- Edge cases: empty trending feed, missing nutritional data, unavailable external services, in-memory weather cache expiry.
+- Error conditions: duplicate rating, unauthorized access.
 
-Avoid writing unit tests that duplicate what property tests already cover (e.g., don't write a unit test for "sorted list" if a property test already covers it for all inputs).
+Avoid writing unit tests that duplicate what property tests already cover.
 
 ### Test Coverage Targets
 
@@ -854,5 +698,6 @@ Avoid writing unit tests that duplicate what property tests already cover (e.g.,
 | Health Score Service | 100% branch coverage (pure function) |
 | Dietary Filter Service | 100% branch coverage |
 | Rating Service validation | 100% branch coverage |
+| Weather Service (in-memory cache) | 100% branch coverage (cache hit, cache miss, service unavailable) |
 | API endpoints | Integration tests for all happy paths and documented error cases |
 | Property tests | One test per correctness property, ≥100 iterations each |

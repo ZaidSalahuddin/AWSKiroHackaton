@@ -1,5 +1,6 @@
 import { pool } from '../db/client';
 import { MealLogItem, NutritionData, NutritionTargets, MealLog } from '../types';
+import { checkFoodieExplorer } from './gamificationService';
 
 // ─── Pure aggregation ─────────────────────────────────────────────────────────
 
@@ -35,7 +36,6 @@ export async function logMeal(
     throw Object.assign(new Error('items_required'), { status: 400, code: 'items_required' });
   }
 
-  // Fetch nutrition for each menu item in order
   const ids = items.map((it) => it.menu_item_id);
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
   const menuResult = await pool.query(
@@ -43,13 +43,11 @@ export async function logMeal(
     ids,
   );
 
-  // Build a map id -> nutrition
   const nutritionMap = new Map<string, NutritionData>();
   for (const row of menuResult.rows) {
     if (row.nutrition) nutritionMap.set(row.id, row.nutrition as NutritionData);
   }
 
-  // Ensure all items have nutrition data
   const nutritionList: NutritionData[] = items.map((item) => {
     const n = nutritionMap.get(item.menu_item_id);
     if (!n) {
@@ -70,7 +68,22 @@ export async function logMeal(
     [studentId, logDate, mealPeriod, JSON.stringify(items), JSON.stringify(totals)],
   );
 
-  return result.rows[0] as MealLog;
+  const log = result.rows[0] as MealLog;
+
+  // Write activity event for social feed
+  await pool.query(
+    `INSERT INTO activity_event (student_id, event_type, payload) VALUES ($1, $2, $3)`,
+    [studentId, 'meal_logged', JSON.stringify({ log_date: logDate, meal_period: mealPeriod })]
+  );
+
+  // Check and award Foodie Explorer badge
+  try {
+    await checkFoodieExplorer(studentId);
+  } catch {
+    // Badge check is best-effort
+  }
+
+  return log;
 }
 
 export async function getMealLogs(
@@ -82,9 +95,8 @@ export async function getMealLogs(
   let endDate: string;
 
   if (range === 'weekly') {
-    // ISO week: find Monday of the week containing `date`
     const d = new Date(date);
-    const day = d.getUTCDay(); // 0=Sun
+    const day = d.getUTCDay();
     const diff = (day === 0 ? -6 : 1 - day);
     const monday = new Date(d);
     monday.setUTCDate(d.getUTCDate() + diff);
@@ -108,7 +120,6 @@ export async function getMealLogs(
 
   const logs = logsResult.rows as MealLog[];
 
-  // Aggregate totals across all logs
   const zero: NutritionData = {
     calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
     fiber_g: 0, sodium_mg: 0, added_sugar_g: 0,
@@ -126,7 +137,6 @@ export async function getMealLogs(
     };
   }, zero);
 
-  // Fetch student's calorie target
   const studentResult = await pool.query(
     `SELECT nutrition_targets FROM student WHERE id = $1`,
     [studentId],
