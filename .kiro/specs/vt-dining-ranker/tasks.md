@@ -8,20 +8,20 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
 
 ## Tasks
 
-- [ ] 1. Initialize monorepo, tooling, and shared types
+- [x] 1. Initialize monorepo, tooling, and shared types
   - Scaffold `api/` (Node/Express/TypeScript) and `client/` (React Native/Expo/TypeScript) workspaces with shared `tsconfig` base
   - Add `fast-check`, `jest`, `supertest` to `api/`; add `jest` and `@testing-library/react-native` to `client/`
   - Create `api/src/types/` with shared TypeScript interfaces: `Student`, `DiningHall`, `MenuItem`, `Rating`, `MealLog`, `WaitTimeReport`, `MealPlanEntry`, `Follow`, `Badge`, `EventSpecial`, `AvailabilityLog`, `AvailabilitySubscription`, `PhotoReview`
   - _Requirements: 1.1, 2.1, 4.1, 5.1, 6.1, 7.1, 10.1, 11.1, 12.1, 13.1, 14.1, 15.1, 17.1_
 
 
-- [ ] 2. Database schema and migrations
+- [x] 2. Database schema and migrations
   - Write PostgreSQL migrations for all tables: `STUDENT`, `DINING_HALL`, `MENU_ITEM`, `RATING`, `PHOTO_REVIEW`, `MEAL_LOG`, `WAIT_TIME_REPORT`, `MEAL_PLAN_ENTRY`, `FOLLOW`, `BADGE`, `EVENT_SPECIAL`, `AVAILABILITY_LOG`, `AVAILABILITY_SUBSCRIPTION`
   - Add indexes on foreign keys and frequently queried columns (`menu_item_id`, `student_id`, `appeared_on`, `created_at`)
   - Set up Redis connection and BullMQ queue definitions (`recency.recompute`, `notification.*`, `trending.refresh`, `availability.predict`)
   - _Requirements: 1.1, 2.1, 6.5, 17.2_
 
-- [ ] 3. Authentication and student account API
+- [x] 3. Authentication and student account API
   - Implement `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` with JWT session tokens
   - Implement `GET /api/students/:id`, `PUT /api/students/:id` (display name, privacy setting, leaderboard opt-out)
   - Implement `PUT /api/dietary-profile` and `GET /api/dietary-profile` endpoints
@@ -34,12 +34,12 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 4.1, 10.3, 14.5_
 
 
-- [ ] 4. Menu Service
+- [x] 4. Menu Service
   - Implement VT Dining Services poller (every 5 min), diff logic, and `menu.updated` event emission
   - Implement `GET /api/dining-halls`, `GET /api/dining-halls/:id/menu`, `GET /api/dining-halls/:id/menu?date=&period=`, `GET /api/menu-items/:id`
   - Return cached data with `stale: true` on upstream unavailability; return `{ available: false }` when no cache exists
   - On each menu ingestion, upsert `AVAILABILITY_LOG` records for every item present (feeds Requirement 17)
-  - [ ] 4.1 Implement menu item grouping by station
+  - [x] 4.1 Implement menu item grouping by station
     - Ensure response groups items by `station` field with no null stations
     - _Requirements: 1.1_
   - [ ]* 4.2 Write property test for menu items grouped by station
@@ -57,7 +57,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 17.1_
 
 
-- [ ] 5. Recency Score Engine
+- [x] 5. Recency Score Engine
   - Implement `recencyScore(item)` pure function: `Σ[rating_i * decay(t_i)] / Σ[decay(t_i)]` with `λ = ln(2)/6`
   - Implement BullMQ worker that consumes `recency.recompute` jobs and persists updated `recency_score` to `MENU_ITEM`
   - Ensure recomputation completes within 10 seconds of job enqueue
@@ -69,7 +69,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 2.3, 2.5**
   - _Requirements: 2.1, 2.2, 2.3, 2.5_
 
-- [ ] 6. Rating Service
+- [x] 6. Rating Service
   - Implement `POST /api/ratings` with check-in validation (within 90 min) or explicit confirmation flag
   - Enforce one rating per student per item per meal period; return `409` on duplicate
   - After recording, enqueue `recency.recompute` job for the affected item
@@ -83,7 +83,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 2.1, 2.4, 2.6_
 
 
-- [ ] 7. Checkpoint — core data pipeline
+- [x] 7. Checkpoint — core data pipeline
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Dietary Filter Service

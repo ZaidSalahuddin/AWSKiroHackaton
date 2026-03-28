@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "lib": ["ES2020"],
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": ["src/**/*", "App.tsx"],
+  "exclude": ["node_modules"]
+}

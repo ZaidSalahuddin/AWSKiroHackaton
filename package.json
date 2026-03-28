@@ -1,0 +1,13 @@
+{
+  "name": "vt-dining-ranker",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "client"
+  ],
+  "scripts": {
+    "test:api": "npm --workspace=api test",
+    "test:client": "npm --workspace=client test"
+  }
+}
