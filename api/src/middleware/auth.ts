@@ -4,6 +4,7 @@ import { DietaryProfile } from '../types';
 
 export interface AuthRequest extends Request {
   studentId?: string;
+  role?: string;
   dietaryProfile?: DietaryProfile;
 }
 
@@ -14,8 +15,9 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   }
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET ?? 'secret') as { sub: string };
+    const payload = jwt.verify(token, process.env.JWT_SECRET ?? 'secret') as { sub: string; role?: string };
     req.studentId = payload.sub;
+    req.role = payload.role ?? 'student';
     next();
   } catch {
     return res.status(401).json({ error: 'unauthorized' });

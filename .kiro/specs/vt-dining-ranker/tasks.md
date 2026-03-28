@@ -130,7 +130,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 3.3**
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 11. Nutritional Tracking Service
+- [x] 11. Nutritional Tracking Service
   - Implement `POST /api/meal-logs`, `GET /api/meal-logs?date=&range=daily|weekly`, `PUT /api/nutrition-targets`
   - Aggregate macros from logged items; store daily totals; soft-delete logs after 90 days
   - Compute `over_calorie_target` flag at read time
@@ -146,7 +146,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
 
-- [ ] 12. Wait Time Service
+- [x] 12. Wait Time Service
   - Implement `POST /api/wait-time-reports` and `GET /api/dining-halls/:id/wait-time`
   - Compute weighted average of reports in past 30 min (exponential decay by age); treat sensor data as high-weight report
   - Return `{ minutes: null, unknown: true }` when no data in 30 min and no sensor data
@@ -155,7 +155,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 7.3**
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 13. Weather Integration
+- [x] 13. Weather Integration
   - Implement OpenWeatherMap poller (every 15 min) with Redis cache (15 min TTL)
   - Expose weather data to Recommendation Engine; include `weather_stale: true` on cache fallback
   - [ ]* 13.1 Write property test for weather response required fields
@@ -163,7 +163,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 9.2**
   - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 14. Recommendation Engine
+- [x] 14. Recommendation Engine
   - Implement `GET /api/recommendations?input=` with scoring pipeline: dietary filter → `base_score = recency_score*0.4 + rating_history_affinity*0.3 + cuisine_preference_match*0.2 + weather_boost*0.1`
   - Apply weather boost (+20% warm/comfort items when temp < 35°F or precipitation; +20% cold/light items when temp > 85°F)
   - Parse natural language `input` into tags for filter/re-rank
@@ -180,10 +180,10 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
 
 
-- [ ] 15. Checkpoint — services layer complete
+- [x] 15. Checkpoint — services layer complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Social Service
+- [x] 16. Social Service
   - Implement `POST /api/follows`, `DELETE /api/follows/:id`, `GET /api/social-feed`, `PUT /api/privacy-settings`
   - Publish activity events (rating, meal log) to fan-out queue; respect privacy settings before fan-out
   - Drop events for `private` users before fan-out
@@ -195,7 +195,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 10.4**
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 17. Photo Review Service
+- [x] 17. Photo Review Service
   - Implement `POST /api/ratings/:id/photo` (multipart, JPEG/PNG, ≤10 MB) with S3-compatible upload
   - Implement `POST /api/photos/:id/report`; set status to `hidden` within 5 min and enqueue moderation job
   - Serve photos via CDN URL stored in `PHOTO_REVIEW.storage_url`
@@ -208,7 +208,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
 
-- [ ] 18. Gamification Service
+- [x] 18. Gamification Service
   - Implement daily cron job that increments streak for students who logged a meal that calendar day; reset to 0 and enqueue `streak_broken` notification for those who missed
   - Implement badge award event listeners on meal-log and rating events (streak milestones at 7/30/100 days, Foodie Explorer at 10 distinct items in 7 days)
   - Implement `GET /api/students/:id/gamification` and `GET /api/leaderboard/weekly`; exclude opted-out students from leaderboard
@@ -229,7 +229,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 12.6**
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 19. Meal Planning Service
+- [x] 19. Meal Planning Service
   - Implement `GET /api/meal-plans`, `POST /api/meal-plans`, `PUT /api/meal-plans/:id/complete`
   - On complete: auto-log nutrition to `MEAL_LOG` for that date
   - On save: create scheduled BullMQ `meal_plan_reminder` job (30 min before meal period)
@@ -243,7 +243,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
 
-- [ ] 20. Hokie Passport (Meal Plan) Service
+- [x] 20. Hokie Passport (Meal Plan) Service
   - Implement `GET /api/hokie-passport/balance`, `POST /api/hokie-passport/connect`, `POST /api/hokie-passport/refresh`
   - Poll Meal_Plan_Service daily via BullMQ cron; cache balance with 24 h TTL; return `stale: true` on unavailability
   - Compute `low_balance_warning: true` at read time when `meal_swipes_remaining < 5`
@@ -252,7 +252,7 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 14.1, 14.2**
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
 
-- [ ] 21. Event Specials Service
+- [x] 21. Event Specials Service
   - Implement `POST /api/event-specials` (staff role required; return `403` otherwise) and `GET /api/dining-halls/:id/specials`
   - Inject active specials into Trending Feed response
   - On publish: enqueue `event_special` notification for students who favorited the dining hall
@@ -282,16 +282,16 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
     - **Validates: Requirements 17.7**
   - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.9_
 
-- [ ] 23. Notification Service
+- [~] 23. Notification Service
   - Implement BullMQ consumer that dispatches FCM (Android) and APNs (iOS) push notifications
   - Handle all job types: `meal_plan_reminder`, `menu_change`, `streak_broken`, `badge_awarded`, `event_special`, `social_activity`, `availability_prediction`, `availability_confirmed`
   - _Requirements: 12.2, 12.5, 13.3, 13.4, 15.3, 17.7, 17.8_
 
 
-- [ ] 24. Checkpoint — all backend services complete
+- [~] 24. Checkpoint — all backend services complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 25. WebSocket real-time layer
+- [~] 25. WebSocket real-time layer
   - Implement WebSocket server on the Express app; define channels per dining hall (`rankings:{hall_id}`, `trending`, `social:{student_id}`, `photos:{item_id}`)
   - Push ranking updates every 30 s per dining hall channel; push trending feed updates every 60 s
   - Push social feed events to follower channels within 60 s of triggering event
@@ -299,13 +299,13 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - Implement reconnect replay: on reconnect, server sends last known state for subscribed channels
   - _Requirements: 2.3, 3.2, 10.2, 11.3_
 
-- [ ] 26. React Native client — project setup and navigation
+- [~] 26. React Native client — project setup and navigation
   - Initialize Expo project in `client/` with TypeScript template
   - Set up React Navigation (tab navigator: Home, Trending, Recommendations, Social, Profile)
   - Configure API client (Axios) with JWT interceptor and WebSocket client with exponential-backoff reconnect
   - _Requirements: 1.1, 2.3, 3.2_
 
-- [ ] 27. Client — Home screen (menu display, rankings, wait times, weather, meal plan balance)
+- [~] 27. Client — Home screen (menu display, rankings, wait times, weather, meal plan balance)
   - Implement dining hall list with open/closed status, current meal period, and wait time estimate
   - Display ranked menu items per hall (sorted by `recency_score`, updated via WebSocket)
   - Display current weather (temperature + conditions) with `weather_stale` indicator
@@ -314,71 +314,71 @@ Monorepo with `api/` (Node.js/Express/TypeScript) and `client/` (React Native/Ex
   - _Requirements: 1.1, 1.3, 1.4, 1.5, 2.3, 7.1, 9.2, 14.1, 14.2_
 
 
-- [ ] 28. Client — Menu item detail screen
+- [~] 28. Client — Menu item detail screen
   - Display name, description, ingredients, allergen tags, `allergen_warning` banner, Health Score, full nutrition panel
   - Display `Previous_Availability_Trend` (bar chart by day-of-week/meal-period) and predicted next appearance or "Not enough history to predict"
   - Show subscribe/unsubscribe button for availability notifications
   - Display photo reviews (CDN images) with report button; show new photos via WebSocket push within 30 s
   - _Requirements: 1.2, 4.3, 5.2, 5.4, 17.3, 17.5, 17.6, 17.7, 11.3, 11.4_
 
-- [ ] 29. Client — Rating submission flow
+- [~] 29. Client — Rating submission flow
   - Implement star-rating UI with check-in confirmation prompt
   - Allow optional photo attachment (JPEG/PNG, ≤10 MB); show validation error on invalid format/size
   - Disable submit if student already rated this item this meal period; show "Already rated" message
   - _Requirements: 2.1, 2.4, 2.6, 11.1, 11.2_
 
-- [ ] 30. Client — Trending Feed screen
+- [~] 30. Client — Trending Feed screen
   - Display top-10 trending items with name, dining hall, recency score, and 60-min rating count; auto-refresh via WebSocket every 60 s
   - Show "Not enough activity yet" when `insufficient_activity: true`
   - Display event specials with "Special Event" badge in the feed
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 15.2, 15.4_
 
-- [ ] 31. Client — Dietary profile and filtering UI
+- [~] 31. Client — Dietary profile and filtering UI
   - Implement dietary profile editor (restrictions checkboxes, allergen input, active toggle, opt-in incomplete toggle)
   - Show "Allergen info incomplete" label on items with `allergen_data_complete: false`
   - _Requirements: 4.1, 4.2, 4.4, 4.5_
 
 
-- [ ] 32. Client — Nutritional tracking and meal log UI
+- [~] 32. Client — Nutritional tracking and meal log UI
   - Implement meal log entry screen (select items + servings); display daily/weekly macro summary with progress bars
   - Show `over_calorie_target` visual indicator when daily calories exceed target
   - Implement nutrition targets editor
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 33. Client — Recommendations screen
+- [~] 33. Client — Recommendations screen
   - Implement recommendations screen with natural language input field
   - Display progressive filter relaxation suggestions when no results match all filters
   - _Requirements: 8.1, 8.2, 8.5, 8.6_
 
-- [ ] 34. Client — Social feed and follow UI
+- [~] 34. Client — Social feed and follow UI
   - Implement social feed screen with real-time WebSocket updates (friend ratings and meal logs within 60 s)
   - Implement follow/unfollow by username; privacy settings screen (public/friends/private)
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 35. Client — Gamification screen (streaks, badges, leaderboard)
+- [~] 35. Client — Gamification screen (streaks, badges, leaderboard)
   - Display current streak, badge list, and weekly leaderboard (top 20)
   - Show leaderboard opt-out toggle; opted-out students see their own stats but not their leaderboard rank
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
 
-- [ ] 36. Client — Meal planning screen
+- [~] 36. Client — Meal planning screen
   - Display 7-day advance menu; allow adding items to meal plan for a specific date/period
   - Show planned meals list; implement "Mark as completed" action
   - _Requirements: 13.1, 13.2, 13.5_
 
 
-- [ ] 37. Client — Hokie Passport connect and balance screen
+- [~] 37. Client — Hokie Passport connect and balance screen
   - Implement Hokie Passport connect flow and manual refresh button
   - Display balance with `stale` indicator; show low-balance warning banner
   - Allow full app use without connecting Hokie Passport
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
 
-- [ ] 38. Accessibility implementation
+- [~] 38. Accessibility implementation
   - Add `accessibilityLabel` and `accessibilityHint` to all interactive elements and images (including photo reviews)
   - Verify all touch targets are ≥44×44 points; use `minimumFontScale` and dynamic type support
   - Ensure color contrast ≥4.5:1 for body text and ≥3:1 for large text/UI components across all screens
   - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
 
-- [ ] 39. Final checkpoint — full integration
+- [~] 39. Final checkpoint — full integration
   - Ensure all tests pass, ask the user if questions arise.
 
 ---
